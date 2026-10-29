@@ -1,8 +1,8 @@
 {
     "uuid": "weekly-planner@egemngyk",
-    "name": "Haftalık Planlayıcı",
-    "description": "Haftalık tekrarlı ve tarihe bağlı kayıtları, görevleri ve sınavları gösteren; her örneği bağımsız çalışan planlayıcı.",
-    "version": "1.0.1",
+    "name": "Weekly Planner",
+    "description": "A weekly planner showing recurring and date-bound entries, tasks and exams; every instance works independently. English and Turkish interface.",
+    "version": "1.1.0",
     "max-instances": "50",
     "website": "https://github.com/egemngyk",
     "license": "MIT"

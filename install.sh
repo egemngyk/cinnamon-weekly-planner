@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Haftalık Planlayıcı desklet kurulum betiği
-#   ./install.sh              kur / güncelle
-#   ./install.sh --uninstall  kaldır (veri dosyalarına dokunmaz)
-#   ./install.sh --reset-settings  kur + eski ayar dosyalarını temizle
+# Weekly Planner desklet install script
+#   ./install.sh                   install / update
+#   ./install.sh --uninstall       remove (does not touch data files)
+#   ./install.sh --reset-settings  install + clear stale settings files
 set -euo pipefail
 
 UUID="weekly-planner@egemngyk"
@@ -11,23 +11,23 @@ DEST="${XDG_DATA_HOME:-$HOME/.local/share}/cinnamon/desklets/$UUID"
 
 if [[ "${1:-}" == "--uninstall" ]]; then
     rm -rf "$DEST"
-    echo "Kaldırıldı: $DEST"
-    echo "Masaüstündeki örnekleri 'Masaüstü Bileşenleri' ekranından silin."
-    echo "Verileriniz şurada duruyor (silmek isterseniz elle): ${XDG_DATA_HOME:-$HOME/.local/share}/weekly-planner-desklet/"
+    echo "Removed: $DEST"
+    echo "Remove any instances on your desktop from the 'Desklets' settings screen."
+    echo "Your data is still here (delete it manually if you want): ${XDG_DATA_HOME:-$HOME/.local/share}/weekly-planner-desklet/"
     exit 0
 fi
 
 if [[ "${1:-}" == "--reset-settings" ]]; then
-    # Eski/bozuk denemelerden kalan ayar dosyalarını temizler (kayıt verilerine dokunmaz).
+    # Clears settings files left over from old/broken attempts (entry data is untouched).
     rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/cinnamon/spices/$UUID"
-    echo "Eski ayar dosyaları temizlendi. Masaüstündeki eski örneği kaldırıp yeniden ekleyin."
+    echo "Stale settings cleared. Remove the old desklet instance from your desktop and add it again."
 fi
 
-command -v cinnamon >/dev/null 2>&1 && echo "Cinnamon sürümü: $(cinnamon --version 2>/dev/null || echo bilinmiyor)"
-[[ -f "$SRC/metadata.json" ]] || { echo "Hata: $SRC/metadata.json bulunamadı" >&2; exit 1; }
+command -v cinnamon >/dev/null 2>&1 && echo "Cinnamon version: $(cinnamon --version 2>/dev/null || echo unknown)"
+[[ -f "$SRC/metadata.json" ]] || { echo "Error: $SRC/metadata.json not found" >&2; exit 1; }
 
 mkdir -p "$(dirname "$DEST")"
 rm -rf "$DEST"
 cp -r "$SRC" "$DEST"
-echo "Kuruldu: $DEST"
+echo "Installed: $DEST"
 echo

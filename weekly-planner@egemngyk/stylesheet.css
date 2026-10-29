@@ -1,4 +1,4 @@
-/* Haftalık Planlayıcı — statik stiller (dinamik renkler desklet.js içinde satır içi verilir) */
+/* Weekly Planner — static styles (dynamic colors are applied inline in desklet.js) */
 .wp-nav { border-radius: 6px; }
 .wp-nav:hover { background-color: rgba(255,255,255,0.14); }
 .wp-day { border-radius: 6px; padding: 4px; }

@@ -1,40 +1,50 @@
 {
     "header0": {
         "type": "header",
-        "description": "Görünüm"
+        "description": "Appearance"
+    },
+    "language": {
+        "type": "combobox",
+        "default": "en",
+        "description": "Language",
+        "tooltip": "Language of the desklet interface (week titles, buttons and dialogs)",
+        "options": {
+            "English": "en",
+            "Türkçe": "tr"
+        }
     },
     "layoutMode": {
         "type": "combobox",
         "default": "columns",
-        "description": "Yerleşim",
+        "description": "Layout",
         "options": {
-            "Dikey sütun (7 sütun)": "columns",
-            "Yatay satır (7 satır)": "rows"
+            "Vertical columns (7 columns)": "columns",
+            "Horizontal rows (7 rows)": "rows"
         }
     },
     "compact": {
         "type": "switch",
         "default": false,
-        "description": "Kompakt görünüm"
+        "description": "Compact view"
     },
     "highlightToday": {
         "type": "switch",
         "default": true,
-        "description": "Bugünü vurgula"
+        "description": "Highlight today"
     },
     "doneStyle": {
         "type": "combobox",
         "default": "both",
-        "description": "Tamamlanan görevlerin görünümü",
+        "description": "Completed task style",
         "options": {
-            "Üstü çizili": "strike",
-            "Soluk": "dim",
-            "Üstü çizili ve soluk": "both"
+            "Strikethrough": "strike",
+            "Dimmed": "dim",
+            "Strikethrough and dimmed": "both"
         }
     },
     "header1": {
         "type": "header",
-        "description": "Boyut"
+        "description": "Size"
     },
     "width": {
         "type": "spinbutton",
@@ -43,7 +53,7 @@
         "max": 2400,
         "step": 10,
         "units": "px",
-        "description": "Genişlik"
+        "description": "Width"
     },
     "height": {
         "type": "spinbutton",
@@ -52,7 +62,7 @@
         "max": 1600,
         "step": 10,
         "units": "px",
-        "description": "Yükseklik"
+        "description": "Height"
     },
     "fontSize": {
         "type": "spinbutton",
@@ -61,12 +71,12 @@
         "max": 28,
         "step": 1,
         "units": "px",
-        "description": "Yazı boyutu"
+        "description": "Font size"
     },
     "uiScale": {
         "type": "combobox",
         "default": 100,
-        "description": "Arayüz ölçeği",
+        "description": "UI scale",
         "options": {
             "%75": 75,
             "%90": 90,
@@ -80,41 +90,41 @@
     },
     "header2": {
         "type": "header",
-        "description": "Renkler"
+        "description": "Colors"
     },
     "bgColor": {
         "type": "colorchooser",
         "default": "rgb(28,30,36)",
-        "description": "Arka plan rengi"
+        "description": "Background color"
     },
     "textColor": {
         "type": "colorchooser",
         "default": "rgb(236,238,242)",
-        "description": "Metin rengi"
+        "description": "Text color"
     },
     "accentColor": {
         "type": "colorchooser",
         "default": "rgb(79,157,222)",
-        "description": "Vurgu rengi"
+        "description": "Accent color"
     },
     "dayHeaderColor": {
         "type": "colorchooser",
         "default": "rgb(170,180,200)",
-        "description": "Gün başlığı rengi"
+        "description": "Day header color"
     },
     "borderColor": {
         "type": "colorchooser",
         "default": "rgb(70,76,90)",
-        "description": "Kenarlık rengi"
+        "description": "Border color"
     },
     "importantColor": {
         "type": "colorchooser",
         "default": "rgb(255,196,60)",
-        "description": "Önemli kayıt vurgusu"
+        "description": "Important entry highlight"
     },
     "header3": {
         "type": "header",
-        "description": "Çerçeve ve saydamlık"
+        "description": "Frame and transparency"
     },
     "opacity": {
         "type": "scale",
@@ -122,7 +132,7 @@
         "min": 10,
         "max": 100,
         "step": 1,
-        "description": "Arka plan opaklığı (%)"
+        "description": "Background opacity (%)"
     },
     "borderWidth": {
         "type": "spinbutton",
@@ -131,7 +141,7 @@
         "max": 8,
         "step": 1,
         "units": "px",
-        "description": "Kenarlık kalınlığı"
+        "description": "Border width"
     },
     "borderRadius": {
         "type": "spinbutton",
@@ -140,31 +150,31 @@
         "max": 40,
         "step": 1,
         "units": "px",
-        "description": "Köşe yuvarlaklığı"
+        "description": "Corner radius"
     },
     "header4": {
         "type": "header",
-        "description": "Başlık biçimleri"
+        "description": "Title formats"
     },
     "dateFormat": {
         "type": "combobox",
         "default": "long",
-        "description": "Hafta aralığı biçimi",
+        "description": "Week range format",
         "options": {
-            "2–8 Kasım 2026": "long",
-            "2–8 Kas 2026": "short",
-            "02.11.2026 – 08.11.2026": "numeric"
+            "November 2–8, 2026": "long",
+            "Nov 2–8, 2026": "short",
+            "11/02/2026 – 11/08/2026": "numeric"
         }
     },
     "headerStyle": {
         "type": "combobox",
         "default": "full",
-        "description": "Gün başlığı biçimi",
+        "description": "Day header format",
         "options": {
-            "Gün adı + tarih (Pazartesi, 2 Kas)": "full",
-            "Kısa ad + gün no (Pzt 2)": "short",
-            "Yalnızca gün adı": "name",
-            "Yalnızca tarih (02.11)": "date"
+            "Day name + date (Monday, Nov 2)": "full",
+            "Short name + day number (Mon 2)": "short",
+            "Day name only": "name",
+            "Date only (11/02)": "date"
         }
     }
 }

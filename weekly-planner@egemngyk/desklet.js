@@ -1,11 +1,11 @@
-/* Haftalık Planlayıcı — Cinnamon desklet
+/* Weekly Planner — Cinnamon desklet
  *
- * Mimari:
- *  - Model: GI'ya bağımlı olmayan saf veri/tekrar mantığı (node ile test edilebilir).
- *  - PlannerDesklet: Cinnamon arayüzü, ayarlar ve depolama.
+ * Architecture:
+ *  - Model: pure data/recurrence logic with no GI dependency (testable with node).
+ *  - PlannerDesklet: Cinnamon UI, settings and storage.
  *
- * Her desklet örneği (desklet_id) kendi ayar dosyasını (Cinnamon yönetir) ve kendi
- * veri dosyasını kullanır: ~/.local/share/weekly-planner-desklet/<desklet_id>.json
+ * Every desklet instance (desklet_id) uses its own settings file (managed by Cinnamon) and its own
+ * data file: ~/.local/share/weekly-planner-desklet/<desklet_id>.json
  */
 
 const Desklet = imports.ui.desklet;
@@ -22,15 +22,78 @@ const ModalDialog = imports.ui.modalDialog;
 
 const DATA_DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'weekly-planner-desklet']);
 
-const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-const MONTHS_S = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
-const DAYS_S = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const PALETTE = ['#4f9dde', '#e5534b', '#e0a030', '#8e6ad8', '#3fb0a0', '#7f8c9a', '#d9609a', '#6ab04c', '#e67e22', '#2c3e50'];
 const FIELDS = ['title', 'notes', 'color', 'important', 'due'];
 
 /* ------------------------------------------------------------------ */
-/* Tarih / renk yardımcıları                                           */
+/* Translations (English is the default; Turkish is selectable)        */
+/* ------------------------------------------------------------------ */
+
+const I18N = {
+    en: {
+        dayFirst: false,
+        months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+        monthsS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+        daysS: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        shortDate: function (d) { return pad(d.getMonth() + 1) + '/' + pad(d.getDate()); },
+        dueLabel: function (d, mon) { return 'due ' + mon + ' ' + d; },
+        today: 'Today',
+        menuWPlus: 'Width +60', menuWMinus: 'Width −60', menuHPlus: 'Height +60', menuHMinus: 'Height −60',
+        menuGoto: 'Go to this week',
+        renderErr: 'Display error (see the log).',
+        cancel: 'Cancel', save: 'Save', del: 'Delete',
+        newEntry: 'New entry', editEntry: 'Edit entry',
+        fTitle: 'Title', fNotes: 'Notes', fColor: 'Color', fDate: 'Date', fRepeat: 'Repeat',
+        fDue: 'End / due date', fPriority: 'Priority',
+        hintTitle: 'Title', hintNotes: 'Description / notes (optional)',
+        hintDate: 'YYYY-MM-DD', hintDue: 'YYYY-MM-DD (optional)',
+        colorDefault: 'Default', invalidDate: 'Invalid date',
+        repeatOnce: 'Selected date only', repeatWeekly: 'Repeat every week',
+        normal: 'Normal', important: '★ Important',
+        errTitle: 'Title is required.', errDate: 'Date must be in YYYY-MM-DD format.',
+        errDue: 'Due date must be in YYYY-MM-DD format.',
+        weeklyEntry: 'Weekly entry', applyWhere: 'Where should this change apply?',
+        thisWeek: 'This week only', thisAndFuture: 'This and following weeks',
+        delWeekly: 'Delete weekly entry', delThisWeek: 'Delete this week only', endFromNow: 'End from this week on',
+        whatToDo: function (t) { return 'What should happen to “' + t + '”?'; },
+        delEntry: 'Delete entry',
+        confirmDel: function (t) { return 'Delete “' + t + '”?'; }
+    },
+    tr: {
+        dayFirst: true,
+        months: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
+        monthsS: ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'],
+        days: ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'],
+        daysS: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'],
+        shortDate: function (d) { return pad(d.getDate()) + '.' + pad(d.getMonth() + 1); },
+        dueLabel: function (d, mon) { return 'teslim ' + d + ' ' + mon; },
+        today: 'Bugün',
+        menuWPlus: 'Genişlik +60', menuWMinus: 'Genişlik −60', menuHPlus: 'Yükseklik +60', menuHMinus: 'Yükseklik −60',
+        menuGoto: 'Bu haftaya git',
+        renderErr: 'Görüntüleme hatası (günlüğe bakın).',
+        cancel: 'İptal', save: 'Kaydet', del: 'Sil',
+        newEntry: 'Yeni kayıt', editEntry: 'Kaydı düzenle',
+        fTitle: 'Başlık', fNotes: 'Not', fColor: 'Renk', fDate: 'Tarih', fRepeat: 'Tekrar',
+        fDue: 'Bitiş / teslim tarihi', fPriority: 'Önem',
+        hintTitle: 'Başlık', hintNotes: 'Açıklama / not (isteğe bağlı)',
+        hintDate: 'YYYY-AA-GG', hintDue: 'YYYY-AA-GG (isteğe bağlı)',
+        colorDefault: 'Varsayılan', invalidDate: 'Geçersiz tarih',
+        repeatOnce: 'Yalnızca seçilen tarih', repeatWeekly: 'Her hafta tekrarla',
+        normal: 'Normal', important: '★ Önemli',
+        errTitle: 'Başlık gerekli.', errDate: 'Tarih YYYY-AA-GG biçiminde olmalı.',
+        errDue: 'Teslim tarihi YYYY-AA-GG biçiminde olmalı.',
+        weeklyEntry: 'Haftalık kayıt', applyWhere: 'Bu değişiklik nereye uygulansın?',
+        thisWeek: 'Yalnızca bu hafta', thisAndFuture: 'Bu ve sonraki haftalar',
+        delWeekly: 'Haftalık kaydı sil', delThisWeek: 'Yalnızca bu haftayı sil', endFromNow: 'Bu haftadan itibaren sonlandır',
+        whatToDo: function (t) { return '“' + t + '” için ne yapılsın?'; },
+        delEntry: 'Kaydı sil',
+        confirmDel: function (t) { return '“' + t + '” silinsin mi?'; }
+    }
+};
+
+/* ------------------------------------------------------------------ */
+/* Date / color helpers                                                */
 /* ------------------------------------------------------------------ */
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -38,11 +101,11 @@ function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + p
 function parseIso(s) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
     if (!m) return null;
-    const d = new Date(+m[1], +m[2] - 1, +m[3], 12); // öğlen: DST kaymalarından korunur
+    const d = new Date(+m[1], +m[2] - 1, +m[3], 12); // noon: avoids DST shifts
     return iso(d) === s ? d : null;
 }
 function addDays(d, n) { const r = new Date(d.getTime()); r.setDate(r.getDate() + n); return r; }
-function wd(d) { return (d.getDay() + 6) % 7; } // Pazartesi = 0
+function wd(d) { return (d.getDay() + 6) % 7; } // Monday = 0
 function mondayOf(d) { return addDays(d, -wd(d)); }
 function today() { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate(), 12); }
 function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
@@ -63,7 +126,7 @@ function lum(p) {
     const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
     return 0.2126 * f(p[0]) + 0.7152 * f(p[1]) + 0.0722 * f(p[2]);
 }
-/* Seçilen renk arka planda okunmuyorsa siyah/beyaza düşer. */
+/* Falls back to black/white when the chosen color is unreadable on the background. */
 function readable(fg, bg) {
     const a = lum(parseColor(fg)), b = lum(parseColor(bg));
     const r = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
@@ -71,20 +134,29 @@ function readable(fg, bg) {
     return b > 0.4 ? 'rgb(20,20,24)' : 'rgb(245,245,250)';
 }
 
-function formatRange(s, fmt) {
+function formatRange(s, fmt, lang) {
+    const lg = I18N[lang] || I18N.en;
     const e = addDays(s, 6);
     const sy = s.getFullYear(), ey = e.getFullYear(), sm = s.getMonth(), em = e.getMonth();
+    const sd = s.getDate(), ed = e.getDate();
     if (fmt === 'numeric') {
-        return pad(s.getDate()) + '.' + pad(sm + 1) + '.' + sy + ' – ' + pad(e.getDate()) + '.' + pad(em + 1) + '.' + ey;
+        return lg.dayFirst
+            ? pad(sd) + '.' + pad(sm + 1) + '.' + sy + ' – ' + pad(ed) + '.' + pad(em + 1) + '.' + ey
+            : pad(sm + 1) + '/' + pad(sd) + '/' + sy + ' – ' + pad(em + 1) + '/' + pad(ed) + '/' + ey;
     }
-    const names = fmt === 'short' ? MONTHS_S : MONTHS;
-    if (sy === ey && sm === em) return s.getDate() + '–' + e.getDate() + ' ' + names[em] + ' ' + ey;
-    if (sy === ey) return s.getDate() + ' ' + names[sm] + ' – ' + e.getDate() + ' ' + names[em] + ' ' + ey;
-    return s.getDate() + ' ' + names[sm] + ' ' + sy + ' – ' + e.getDate() + ' ' + names[em] + ' ' + ey;
+    const names = fmt === 'short' ? lg.monthsS : lg.months;
+    if (lg.dayFirst) {
+        if (sy === ey && sm === em) return sd + '–' + ed + ' ' + names[em] + ' ' + ey;
+        if (sy === ey) return sd + ' ' + names[sm] + ' – ' + ed + ' ' + names[em] + ' ' + ey;
+        return sd + ' ' + names[sm] + ' ' + sy + ' – ' + ed + ' ' + names[em] + ' ' + ey;
+    }
+    if (sy === ey && sm === em) return names[em] + ' ' + sd + '–' + ed + ', ' + ey;
+    if (sy === ey) return names[sm] + ' ' + sd + ' – ' + names[em] + ' ' + ed + ', ' + ey;
+    return names[sm] + ' ' + sd + ', ' + sy + ' – ' + names[em] + ' ' + ed + ', ' + ey;
 }
 
 /* ------------------------------------------------------------------ */
-/* Model: tekrar kuralları ve istisnalar                               */
+/* Model: recurrence rules and exceptions                              */
 /* ------------------------------------------------------------------ */
 /*
  * data = {
@@ -92,11 +164,11 @@ function formatRange(s, fmt) {
  *   ui: { weekOffset },
  *   items: [
  *     {id, kind:'once',   date,                       ...FIELDS},
- *     {id, kind:'weekly', weekday, startDate, endDate, ...FIELDS}   // endDate: dahil, null = süresiz
+ *     {id, kind:'weekly', weekday, startDate, endDate, ...FIELDS}   // endDate: inclusive, null = open-ended
  *   ],
- *   occ: { "<itemId>|<YYYY-MM-DD>": { done?, skip?, over?: {...FIELDS} } }   // tekrar başına istisna
+ *   occ: { "<itemId>|<YYYY-MM-DD>": { done?, skip?, over?: {...FIELDS} } }   // per-occurrence exception
  * }
- * Tamamlanma durumu, atlama ve değişiklik "kural"a değil o tarihteki örneğe bağlıdır.
+ * Done state, skips and overrides belong to the occurrence on that date, not to the rule.
  */
 const Model = {
     defaults: function () {
@@ -114,7 +186,7 @@ const Model = {
         return r;
     },
 
-    /* Bozuk/eksik veriye karşı koruyucu normalizasyon. */
+    /* Defensive normalization against corrupt or missing data. */
     normalize: function (raw) {
         const d = Model.defaults();
         if (!raw || typeof raw !== 'object') return d;
@@ -155,7 +227,7 @@ const Model = {
         return it.weekday === weekdayIndex && date >= it.startDate && (!it.endDate || date <= it.endDate);
     },
 
-    /* Bir kaydın belirli bir tarihteki örneği (istisnalar uygulanmış). */
+    /* The occurrence of an item on a given date (exceptions applied). */
     occurrence: function (data, it, date) {
         const key = it.id + '|' + date;
         const x = data.occ[key] || {};
@@ -165,7 +237,7 @@ const Model = {
         return { item: it, date: date, key: key, f: f, done: !!x.done };
     },
 
-    /* start (pazartesi) ile başlayan 7 günün örnekleri. */
+    /* Occurrences for the 7 days starting at `start` (a Monday). */
     occurrences: function (data, start) {
         const dates = [], days = [];
         for (let i = 0; i < 7; i++) { dates.push(iso(addDays(start, i))); days.push([]); }
@@ -222,7 +294,7 @@ const Model = {
         if (Object.keys(x).length) data.occ[o.key] = x; else delete data.occ[o.key];
     },
 
-    /* scope: 'this' (yalnızca bu örnek) | 'future' (bu ve sonraki haftalar) — yalnızca haftalık kayıtlar için. */
+    /* scope: 'this' (this occurrence only) | 'future' (this and following weeks) — weekly items only. */
     edit: function (data, o, fields, date, repeat, scope) {
         const it = o.item, f = Model.pick(fields);
         if (it.kind === 'once') {
@@ -236,14 +308,14 @@ const Model = {
             Model.moveOcc(data, it.id, o.date, date);
             return;
         }
-        // --- haftalık kayıt ---
+        // --- weekly item ---
         if (scope === 'this') {
             if (repeat && date === o.date) {
                 const x = data.occ[o.key] || {};
                 x.over = f;
                 data.occ[o.key] = x;
             } else {
-                // bu örnek başka güne taşındı / tekrar kapatıldı: örneği atla, tek seferlik kayıt oluştur
+                // this occurrence was moved to another day / repeat was turned off: skip it and create a one-off item
                 const x = data.occ[o.key] || {};
                 const wasDone = !!x.done;
                 x.skip = true; delete x.over;
@@ -273,7 +345,7 @@ const Model = {
         it.endDate = iso(addDays(parseIso(cut), -1));
         const n = Model.create(data, f, date, true);
         n.endDate = origEnd;
-        // cut tarihinden sonraki istisnaları yeni seriye taşı (gün değiştiyse at)
+        // move exceptions on/after the cut date to the new series (drop them if the weekday changed)
         Model.keysOf(data, it.id).forEach(function (k) {
             const d = k.slice(k.indexOf('|') + 1);
             if (d >= cut) {
@@ -297,7 +369,7 @@ const Model = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Arayüz yardımcıları                                                  */
+/* UI helpers                                                          */
 /* ------------------------------------------------------------------ */
 
 function chipStyle(on, color, swatch) {
@@ -336,9 +408,9 @@ function field(title, widget) {
     return b;
 }
 
-/* x_fill/y_fill bazı Cinnamon sürümlerinde yok; kurucuda verilirse yükleme çöker, burada sessizce denenir. */
+/* x_fill/y_fill don't exist in some Cinnamon versions; passing them to the constructor would crash loading, so they are set here and failures are ignored. */
 function fillActor(a) {
-    try { a.x_fill = true; a.y_fill = true; } catch (e) { /* yut */ }
+    try { a.x_fill = true; a.y_fill = true; } catch (e) { /* ignore */ }
 }
 
 function mkEntry(text, hint, width) {
@@ -346,12 +418,12 @@ function mkEntry(text, hint, width) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Desklet                                                              */
+/* Desklet                                                             */
 /* ------------------------------------------------------------------ */
 
 const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width', 'height', 'fontSize',
     'bgColor', 'textColor', 'accentColor', 'dayHeaderColor', 'borderColor', 'importantColor',
-    'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale'];
+    'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language'];
 
 function PlannerDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
@@ -374,12 +446,12 @@ PlannerDesklet.prototype = {
         try {
             this._setup(metadata, desklet_id);
         } catch (e) {
-            // Yükleme hatası "!" olarak kalmasın: nedeni günlüğe yaz, masaüstünde göster.
-            global.logError('[weekly-planner] başlatma hatası: ' + e + '\n' + (e && e.stack ? e.stack : ''));
+            // Don't leave a bare "!" on load failure: log the cause and show it on the desktop.
+            global.logError('[weekly-planner] startup error: ' + e + '\n' + (e && e.stack ? e.stack : ''));
             try {
-                this.setContent(new St.Label({ text: 'Haftalık Planlayıcı başlatılamadı:\n' + e,
+                this.setContent(new St.Label({ text: 'Weekly Planner failed to start:\n' + e,
                     style: 'color:#ff7b72; padding:8px; background-color:rgba(0,0,0,0.6);' }));
-            } catch (e2) { /* yut */ }
+            } catch (e2) { /* ignore */ }
         }
     },
 
@@ -398,7 +470,7 @@ PlannerDesklet.prototype = {
         this._dayTimer = Mainloop.timeout_add_seconds(60, this._checkDay.bind(this));
     },
 
-    /* ---------------- depolama ---------------- */
+    /* ---------------- storage ---------------- */
 
     _dataPath: function () { return GLib.build_filenamev([DATA_DIR, this.instanceId + '.json']); },
 
@@ -409,11 +481,11 @@ PlannerDesklet.prototype = {
             try { return JSON.parse(Cinnamon.get_file_contents_utf8_sync(p)); } catch (e) { return null; }
         };
         let raw = tryRead(path);
-        if (raw === null) { // bozuk dosya: kenara al, yedeği dene
+        if (raw === null) { // corrupt file: move it aside, try the backup
             try {
                 Gio.File.new_for_path(path).move(Gio.File.new_for_path(path + '.corrupt-' + Date.now()),
                     Gio.FileCopyFlags.OVERWRITE, null, null);
-            } catch (e) { global.logError('[weekly-planner] bozuk dosya taşınamadı: ' + e); }
+            } catch (e) { global.logError('[weekly-planner] could not move corrupt file: ' + e); }
             raw = tryRead(path + '~');
         }
         this.data = Model.normalize(raw || null);
@@ -432,10 +504,10 @@ PlannerDesklet.prototype = {
         try {
             GLib.mkdir_with_parents(DATA_DIR, 493); // 0755
             const f = Gio.File.new_for_path(this._dataPath());
-            // replace_contents: geçici dosya + rename (atomik); make_backup=true -> "<dosya>~" yedeği
+            // replace_contents: temp file + rename (atomic); make_backup=true -> "<file>~" backup
             f.replace_contents(JSON.stringify(this.data), null, true, Gio.FileCreateFlags.NONE, null);
         } catch (e) {
-            global.logError('[weekly-planner] kayıt hatası: ' + e);
+            global.logError('[weekly-planner] save error: ' + e);
         }
     },
 
@@ -444,7 +516,7 @@ PlannerDesklet.prototype = {
         this._render();
     },
 
-    /* ---------------- ayarlar / tema ---------------- */
+    /* ---------------- settings / theme ---------------- */
 
     _onCfgChanged: function () {
         if (this._cfgIdle) return;
@@ -468,7 +540,7 @@ PlannerDesklet.prototype = {
             imp: this.cfg_importantColor,
             k: Math.max(0.5, Math.min(3, (+this.cfg_uiScale || 100) / 100))
         };
-        t.fs = Math.round(this.cfg_fontSize * t.k * 10) / 10; // ölçekli yazı boyutu
+        t.fs = Math.round(this.cfg_fontSize * t.k * 10) / 10; // scaled font size
         this._root.set_size(this.cfg_width, this.cfg_height);
         this._root.style = 'background-color:' + t.bg + '; border:' + this.cfg_borderWidth + 'px solid ' + t.border +
             '; border-radius:' + this.cfg_borderRadius + 'px; padding:' + this._px(8) + 'px; color:' + t.text + '; font-size:' + t.fs + 'px;';
@@ -477,9 +549,17 @@ PlannerDesklet.prototype = {
         this._title.style = 'font-weight:bold; color:' + t.text + '; font-size:' + Math.round(t.fs * 1.1) + 'px;';
         this._head.style = 'spacing:' + this._px(4) + 'px; padding-bottom:' + this._px(6) + 'px;';
         (this._handleList || []).forEach(function (h) { h(false); });
+        this._btnToday.set_label(this._t('today'));
+        (this._menuItems || []).forEach(function (m) {
+            try { m[1].label.set_text(this._t(m[0])); } catch (e) { /* ignore */ }
+        }, this);
     },
 
-    /* Arayüz ölçeği (%): sabit piksel değerlerini ölçekler. */
+    /* Current UI language table / string lookup. */
+    _L: function () { return I18N[this.cfg_language] || I18N.en; },
+    _t: function (key) { const v = this._L()[key]; return v === undefined ? I18N.en[key] : v; },
+
+    /* UI scale (%): scales fixed pixel values. */
     _px: function (n) {
         const k = Math.max(0.5, Math.min(3, (+this.cfg_uiScale || 100) / 100));
         return Math.max(1, Math.round(n * k));
@@ -489,18 +569,20 @@ PlannerDesklet.prototype = {
         const self = this;
         const bump = function (key, delta, min, max) {
             const v = Math.max(min, Math.min(max, self['cfg_' + key] + delta));
-            try { self.settings.setValue(key, v); } catch (e) { /* yut */ }
+            try { self.settings.setValue(key, v); } catch (e) { /* ignore */ }
             self['cfg_' + key] = v;
             self._onCfgChanged();
         };
+        this._menuItems = [];
+        const add = function (key, fn) { self._menuItems.push([key, self._menu.addAction(self._t(key), fn)]); };
         try {
-            this._menu.addAction('Genişlik +60', function () { bump('width', 60, 240, 2400); });
-            this._menu.addAction('Genişlik −60', function () { bump('width', -60, 240, 2400); });
-            this._menu.addAction('Yükseklik +60', function () { bump('height', 60, 160, 1600); });
-            this._menu.addAction('Yükseklik −60', function () { bump('height', -60, 160, 1600); });
-            this._menu.addAction('Bu haftaya git', function () { self._gotoWeek(0); });
+            add('menuWPlus', function () { bump('width', 60, 240, 2400); });
+            add('menuWMinus', function () { bump('width', -60, 240, 2400); });
+            add('menuHPlus', function () { bump('height', 60, 160, 1600); });
+            add('menuHMinus', function () { bump('height', -60, 160, 1600); });
+            add('menuGoto', function () { self._gotoWeek(0); });
         } catch (e) {
-            global.logError('[weekly-planner] menü eklenemedi: ' + e);
+            global.logError('[weekly-planner] could not add menu items: ' + e);
         }
     },
 
@@ -510,7 +592,7 @@ PlannerDesklet.prototype = {
         return true;
     },
 
-    /* ---------------- iskelet ---------------- */
+    /* ---------------- skeleton ---------------- */
 
     _buildUi: function () {
         this._root = new St.BoxLayout({ vertical: true });
@@ -522,7 +604,7 @@ PlannerDesklet.prototype = {
         };
         this._btnPrev = mk('‹', function () { this._shiftWeek(-1); }.bind(this));
         this._btnNext = mk('›', function () { this._shiftWeek(1); }.bind(this));
-        this._btnToday = mk('Bugün', function () { this._gotoWeek(0); }.bind(this));
+        this._btnToday = mk('Today', function () { this._gotoWeek(0); }.bind(this));
         this._btnAdd = mk('＋', function () { this._openEditor(null, this._defaultNewDate()); }.bind(this));
         this._title = new St.Label({ text: '', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
         head.add_actor(this._btnPrev);
@@ -532,7 +614,7 @@ PlannerDesklet.prototype = {
         head.add_actor(this._btnAdd);
         this._root.add_actor(head);
 
-        // orta bölüm: kaydırma alanı + sağ kenar tutamacı
+        // middle section: scroll area + right-edge handle
         const mid = new St.BoxLayout({ x_expand: true, y_expand: true });
         this._scroll = new St.ScrollView({ x_expand: true, y_expand: true });
         this._scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
@@ -542,7 +624,7 @@ PlannerDesklet.prototype = {
         mid.add_actor(this._makeHandle('r'));
         this._root.add_actor(mid);
 
-        // alt bölüm: alt kenar tutamacı + sağ alt köşe tutamacı
+        // bottom section: bottom-edge handle + bottom-right corner handle
         const bottom = new St.BoxLayout({ x_expand: true });
         const hb = this._makeHandle('b');
         hb.x_expand = true;
@@ -553,9 +635,9 @@ PlannerDesklet.prototype = {
         this.setContent(this._root);
     },
 
-    /* ---------------- fareyle yeniden boyutlandırma ---------------- */
+    /* ---------------- drag-to-resize ---------------- */
 
-    /* kind: 'r' sağ kenar (genişlik), 'b' alt kenar (yükseklik), 'c' sağ alt köşe (ikisi) */
+    /* kind: 'r' right edge (width), 'b' bottom edge (height), 'c' bottom-right corner (both) */
     _makeHandle: function (kind) {
         const glyph = kind === 'r' ? '⋮' : (kind === 'b' ? '⋯' : '◢');
         const idle = kind === 'c' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)';
@@ -578,7 +660,7 @@ PlannerDesklet.prototype = {
         h.connect('button-press-event', function (actor, event) {
             if (event.get_button() !== 1) return false;
             this._startResize(kind, event);
-            return true; // olayı tüket: desklet sürüklenmesin
+            return true; // consume the event so the desklet itself isn't dragged
         }.bind(this));
         return h;
     },
@@ -587,9 +669,9 @@ PlannerDesklet.prototype = {
         if (this._rs) return;
         const c = event.get_coords();
         this._rs = { kind: kind, x: c[0], y: c[1], w: this.cfg_width, h: this.cfg_height };
-        // Fare deskletin dışına (başka pencerelerin üstüne) çıksa da olayları kaçırmamak için:
-        //  1) imleci yakala, 2) düğme bırakma olayını sahnede dinle,
-        //  3) asıl konum/düğme durumunu zamanlayıcıyla global.get_pointer()'dan oku.
+        // So no events are missed when the pointer leaves the desklet (e.g. over other windows):
+        //  1) grab the pointer, 2) listen for button release on the stage,
+        //  3) read the real position/button state from global.get_pointer() on a timer.
         try { Clutter.grab_pointer(this._root); this._rsGrab = true; } catch (e) { this._rsGrab = false; }
         this._rsId = global.stage.connect('captured-event', this._onResizeEvent.bind(this));
         this._rsTimer = Mainloop.timeout_add(30, this._resizeTick.bind(this));
@@ -610,7 +692,7 @@ PlannerDesklet.prototype = {
             const p = global.get_pointer(); // [x, y, modifiers]
             if (!(p[2] & Clutter.ModifierType.BUTTON1_MASK)) { this._rsTimer = null; this._endResize(true); return false; }
             this._applyResizePointer(p[0], p[1]);
-        } catch (e) { /* yut */ }
+        } catch (e) { /* ignore */ }
         return true;
     },
 
@@ -631,35 +713,35 @@ PlannerDesklet.prototype = {
 
     _endResize: function (save) {
         if (this._rsTimer) { Mainloop.source_remove(this._rsTimer); this._rsTimer = null; }
-        if (this._rsId) { try { global.stage.disconnect(this._rsId); } catch (e) { /* yut */ } this._rsId = null; }
-        if (this._rsGrab) { try { Clutter.ungrab_pointer(); } catch (e) { /* yut */ } this._rsGrab = false; }
+        if (this._rsId) { try { global.stage.disconnect(this._rsId); } catch (e) { /* ignore */ } this._rsId = null; }
+        if (this._rsGrab) { try { Clutter.ungrab_pointer(); } catch (e) { /* ignore */ } this._rsGrab = false; }
         const was = !!this._rs;
         this._rs = null;
         if (save && was) {
             try {
                 this.settings.setValue('width', this.cfg_width);
                 this.settings.setValue('height', this.cfg_height);
-            } catch (e) { global.logError('[weekly-planner] boyut kaydedilemedi: ' + e); }
+            } catch (e) { global.logError('[weekly-planner] could not save size: ' + e); }
             this._onCfgChanged();
         }
     },
 
-    /* ---------------- çizim ---------------- */
+    /* ---------------- rendering ---------------- */
 
     _render: function () {
         try {
             this._todayStr = iso(today());
             const start = this._weekStart();
-            this._title.set_text(formatRange(start, this.cfg_dateFormat));
+            this._title.set_text(formatRange(start, this.cfg_dateFormat, this.cfg_language));
             const occ = Model.occurrences(this.data, start);
             this._body.destroy_all_children();
             if (this.cfg_layoutMode === 'rows') this._renderRows(occ); else this._renderCols(occ);
         } catch (e) {
-            global.logError('[weekly-planner] çizim hatası: ' + e);
+            global.logError('[weekly-planner] render error: ' + e);
             try {
                 this._body.destroy_all_children();
-                this._body.add_actor(new St.Label({ text: 'Görüntüleme hatası (günlüğe bakın).' }));
-            } catch (e2) { /* yut */ }
+                this._body.add_actor(new St.Label({ text: this._t('renderErr') }));
+            } catch (e2) { /* ignore */ }
         }
     },
 
@@ -675,13 +757,13 @@ PlannerDesklet.prototype = {
     },
 
     _dayHeader: function (i, date, isToday, horizontalRow) {
-        const t = this._theme, d = parseIso(date);
+        const t = this._theme, d = parseIso(date), lg = this._L();
         const style = this.cfg_headerStyle;
         let name = '', sub = '';
-        if (style === 'full') { name = DAYS[i]; sub = d.getDate() + ' ' + MONTHS_S[d.getMonth()]; }
-        else if (style === 'short') { name = DAYS_S[i]; sub = '' + d.getDate(); }
-        else if (style === 'name') { name = DAYS[i]; }
-        else { name = DAYS_S[i]; sub = pad(d.getDate()) + '.' + pad(d.getMonth() + 1); }
+        if (style === 'full') { name = lg.days[i]; sub = lg.dayFirst ? d.getDate() + ' ' + lg.monthsS[d.getMonth()] : lg.monthsS[d.getMonth()] + ' ' + d.getDate(); }
+        else if (style === 'short') { name = lg.daysS[i]; sub = '' + d.getDate(); }
+        else if (style === 'name') { name = lg.days[i]; }
+        else { name = lg.daysS[i]; sub = lg.shortDate(d); }
         const color = (isToday && this.cfg_highlightToday) ? readable(t.accent, this.cfg_bgColor) : t.head;
         const box = new St.BoxLayout({ vertical: true, style: 'padding-bottom:3px;' });
         const l1 = new St.Label({ text: name, style: 'font-weight:bold; color:' + color + ';' });
@@ -692,10 +774,10 @@ PlannerDesklet.prototype = {
     },
 
     _renderCols: function (occ) {
-        // iç dolgu (16) + kenarlık + sağ tutamaç (12) + dikey kaydırma çubuğu payı (22)
+        // inner padding (16) + border + right handle (12) + vertical scrollbar allowance (22)
         const pad2 = this._px(16) + 2 * this.cfg_borderWidth + this._px(12) + this._px(22);
         const gap = this._px(4);
-        // Sütunlar genişliğe göre daralır; 70 px altına inerse yatay kaydırma (overflow) devreye girer.
+        // Columns shrink with the width; below 70 px they stop shrinking and horizontal scrolling (overflow) kicks in.
         const colW = Math.max(this._px(70), Math.floor((this.cfg_width - pad2 - 6 * gap) / 7));
         const cols = new St.BoxLayout({ style: 'spacing:' + gap + 'px;' });
         const todayStr = this._todayStr;
@@ -767,7 +849,7 @@ PlannerDesklet.prototype = {
 
         const small = 'font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:200;';
         const meta = [];
-        if (f.due) { const d = parseIso(f.due); if (d) meta.push('teslim ' + d.getDate() + ' ' + MONTHS_S[d.getMonth()]); }
+        if (f.due) { const d = parseIso(f.due); if (d) meta.push(this._L().dueLabel(d.getDate(), this._L().monthsS[d.getMonth()])); }
         if (meta.length) {
             const ml = new St.Label({ text: meta.join(' · '), style: small });
             ml.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
@@ -785,10 +867,10 @@ PlannerDesklet.prototype = {
         return btn;
     },
 
-    /* ---------------- diyaloglar ---------------- */
+    /* ---------------- dialogs ---------------- */
 
     _later: function (fn) {
-        // bir ModalDialog kapanırken hemen yenisini açmamak için kısa gecikme
+        // short delay so a new ModalDialog isn't opened while another one is closing
         Mainloop.timeout_add(220, function () { try { fn(); } catch (e) { global.logError('[weekly-planner] ' + e); } return false; });
     },
 
@@ -806,12 +888,12 @@ PlannerDesklet.prototype = {
         const buttons = options.map(function (o) {
             return { label: o.label, action: function () { dlg.close(); o.run(); } };
         });
-        buttons.push({ label: 'Vazgeç', action: function () { dlg.close(); }, key: Clutter.KEY_Escape });
+        buttons.push({ label: this._t('cancel'), action: function () { dlg.close(); }, key: Clutter.KEY_Escape });
         dlg.setButtons(buttons);
         dlg.open();
     },
 
-    /* o = örnek (düzenleme) veya null (yeni); dateStr = yeni kayıt için tarih */
+    /* o = occurrence (edit) or null (new); dateStr = date for a new entry */
     _openEditor: function (o, dateStr) {
         const self = this;
         const f = o ? o.f : { title: '', notes: '', color: null, important: false, due: '' };
@@ -820,31 +902,31 @@ PlannerDesklet.prototype = {
             color: f.color || null,
             important: !!f.important
         };
-        const dlg = this._newDialog(o ? 'Kaydı düzenle' : 'Yeni kayıt');
+        const dlg = this._newDialog(o ? this._t('editEntry') : this._t('newEntry'));
         const L = dlg.contentLayout;
 
-        const titleE = mkEntry(f.title, 'Başlık');
-        L.add_actor(field('Başlık', titleE));
+        const titleE = mkEntry(f.title, this._t('hintTitle'));
+        L.add_actor(field(this._t('fTitle'), titleE));
 
-        const notesE = mkEntry(f.notes, 'Açıklama / not (isteğe bağlı)');
+        const notesE = mkEntry(f.notes, this._t('hintNotes'));
         notesE.clutter_text.set_single_line_mode(false);
         notesE.clutter_text.set_activatable(false);
         notesE.clutter_text.set_line_wrap(true);
         notesE.style = 'min-width:280px; min-height:48px;';
-        L.add_actor(field('Not', notesE));
+        L.add_actor(field(this._t('fNotes'), notesE));
 
-        const colOpts = [{ label: 'Varsayılan', value: null }].concat(PALETTE.map(function (c) {
+        const colOpts = [{ label: this._t('colorDefault'), value: null }].concat(PALETTE.map(function (c) {
             return { label: '', value: c, color: c, swatch: true };
         }));
-        L.add_actor(field('Renk', chipRow(colOpts, function () { return st.color; }, function (v) { st.color = v; }, 6)));
+        L.add_actor(field(this._t('fColor'), chipRow(colOpts, function () { return st.color; }, function (v) { st.color = v; }, 6)));
 
-        // tarih
+        // date
         const dateBox = new St.BoxLayout({ style: 'spacing:6px;' });
-        const dateE = mkEntry(o ? o.date : dateStr, 'YYYY-AA-GG', 130);
+        const dateE = mkEntry(o ? o.date : dateStr, this._t('hintDate'), 130);
         const wdL = new St.Label({ text: '', y_align: Clutter.ActorAlign.CENTER, style: 'min-width:80px;' });
         const refreshWd = function () {
             const d = parseIso(dateE.get_text().trim());
-            wdL.set_text(d ? DAYS[wd(d)] : 'Geçersiz tarih');
+            wdL.set_text(d ? this._L().days[wd(d)] : this._t('invalidDate'));
         };
         const shift = function (n) {
             const d = parseIso(dateE.get_text().trim()) || parseIso(o ? o.date : dateStr);
@@ -862,19 +944,19 @@ PlannerDesklet.prototype = {
         dateBox.add_actor(wdL);
         dateE.clutter_text.connect('text-changed', refreshWd);
         refreshWd();
-        L.add_actor(field('Tarih', dateBox));
+        L.add_actor(field(this._t('fDate'), dateBox));
 
-        L.add_actor(field('Tekrar', chipRow([
-            { label: 'Yalnızca seçilen tarih', value: false },
-            { label: 'Her hafta tekrarla', value: true }
+        L.add_actor(field(this._t('fRepeat'), chipRow([
+            { label: this._t('repeatOnce'), value: false },
+            { label: this._t('repeatWeekly'), value: true }
         ], function () { return st.repeat; }, function (v) { st.repeat = v; }, 2)));
 
-        const dueE = mkEntry(f.due, 'YYYY-AA-GG (isteğe bağlı)', 180);
-        L.add_actor(field('Bitiş / teslim tarihi', dueE));
+        const dueE = mkEntry(f.due, this._t('hintDue'), 180);
+        L.add_actor(field(this._t('fDue'), dueE));
 
-        L.add_actor(field('Önem', chipRow([
-            { label: 'Normal', value: false },
-            { label: '★ Önemli', value: true, color: this._theme.imp }
+        L.add_actor(field(this._t('fPriority'), chipRow([
+            { label: this._t('normal'), value: false },
+            { label: this._t('important'), value: true, color: this._theme.imp }
         ], function () { return st.important; }, function (v) { st.important = v; }, 2)));
 
         const errL = new St.Label({ text: '', style: 'color:#ff7b72; padding-top:6px;' });
@@ -883,11 +965,11 @@ PlannerDesklet.prototype = {
         const onSave = function () {
             const err = function (m) { errL.set_text(m); };
             const title = titleE.get_text().trim();
-            if (!title) return err('Başlık gerekli.');
+            if (!title) return err(self._t('errTitle'));
             const date = dateE.get_text().trim();
-            if (!parseIso(date)) return err('Tarih YYYY-AA-GG biçiminde olmalı.');
+            if (!parseIso(date)) return err(self._t('errDate'));
             const due = dueE.get_text().trim();
-            if (due && !parseIso(due)) return err('Teslim tarihi YYYY-AA-GG biçiminde olmalı.');
+            if (due && !parseIso(due)) return err(self._t('errDue'));
             const fields = {
                 title: title.slice(0, 200), notes: notesE.get_text().trim().slice(0, 2000),
                 color: st.color, important: st.important, due: due
@@ -897,12 +979,12 @@ PlannerDesklet.prototype = {
         };
 
         const buttons = [];
-        if (o) buttons.push({ label: 'Sil', action: function () { dlg.close(); self._later(function () { self._confirmDelete(o); }); } });
-        buttons.push({ label: 'İptal', action: function () { dlg.close(); }, key: Clutter.KEY_Escape });
-        buttons.push({ label: 'Kaydet', action: onSave });
+        if (o) buttons.push({ label: self._t('del'), action: function () { dlg.close(); self._later(function () { self._confirmDelete(o); }); } });
+        buttons.push({ label: self._t('cancel'), action: function () { dlg.close(); }, key: Clutter.KEY_Escape });
+        buttons.push({ label: self._t('save'), action: onSave });
         dlg.setButtons(buttons);
         dlg.open();
-        try { dlg.setInitialKeyFocus(titleE); } catch (e) { /* eski sürümlerde yok */ }
+        try { dlg.setInitialKeyFocus(titleE); } catch (e) { /* not available in older versions */ }
     },
 
     _commitEdit: function (o, fields, date, repeat) {
@@ -913,9 +995,9 @@ PlannerDesklet.prototype = {
             return;
         }
         if (o.item.kind === 'weekly') {
-            this._choose('Haftalık kayıt', 'Bu değişiklik nereye uygulansın?', [
-                { label: 'Yalnızca bu hafta', run: function () { Model.edit(self.data, o, fields, date, repeat, 'this'); self._changed(); } },
-                { label: 'Bu ve sonraki haftalar', run: function () { Model.edit(self.data, o, fields, date, repeat, 'future'); self._changed(); } }
+            this._choose(this._t('weeklyEntry'), this._t('applyWhere'), [
+                { label: self._t('thisWeek'), run: function () { Model.edit(self.data, o, fields, date, repeat, 'this'); self._changed(); } },
+                { label: self._t('thisAndFuture'), run: function () { Model.edit(self.data, o, fields, date, repeat, 'future'); self._changed(); } }
             ]);
         } else {
             Model.edit(this.data, o, fields, date, repeat, 'this');
@@ -926,26 +1008,26 @@ PlannerDesklet.prototype = {
     _confirmDelete: function (o) {
         const self = this;
         if (o.item.kind === 'weekly') {
-            this._choose('Haftalık kaydı sil', '“' + trunc(o.f.title, 50) + '” için ne yapılsın?', [
-                { label: 'Yalnızca bu haftayı sil', run: function () { Model.remove(self.data, o, 'this'); self._changed(); } },
-                { label: 'Bu haftadan itibaren sonlandır', run: function () { Model.remove(self.data, o, 'future'); self._changed(); } }
+            this._choose(this._t('delWeekly'), this._t('whatToDo')(trunc(o.f.title, 50)), [
+                { label: self._t('delThisWeek'), run: function () { Model.remove(self.data, o, 'this'); self._changed(); } },
+                { label: self._t('endFromNow'), run: function () { Model.remove(self.data, o, 'future'); self._changed(); } }
             ]);
         } else {
-            this._choose('Kaydı sil', '“' + trunc(o.f.title, 50) + '” silinsin mi?', [
-                { label: 'Sil', run: function () { Model.remove(self.data, o, 'this'); self._changed(); } }
+            this._choose(this._t('delEntry'), this._t('confirmDel')(trunc(o.f.title, 50)), [
+                { label: self._t('del'), run: function () { Model.remove(self.data, o, 'this'); self._changed(); } }
             ]);
         }
     },
 
-    /* ---------------- yaşam döngüsü ---------------- */
+    /* ---------------- lifecycle ---------------- */
 
     on_desklet_removed: function () {
         this._endResize(false);
         if (this._dayTimer) { Mainloop.source_remove(this._dayTimer); this._dayTimer = null; }
         if (this._cfgIdle) { Mainloop.source_remove(this._cfgIdle); this._cfgIdle = null; }
         if (this._saveTimer) { Mainloop.source_remove(this._saveTimer); this._saveTimer = null; }
-        this._saveNow(); // bekleyen değişikliği yaz; veri dosyasına bilerek dokunulmaz (yeniden yüklemede kayıp olmasın)
-        try { this.settings.finalize(); } catch (e) { /* yut */ }
+        this._saveNow(); // flush pending changes; the data file is intentionally left in place (so nothing is lost on reload)
+        try { this.settings.finalize(); } catch (e) { /* ignore */ }
     }
 };
 
