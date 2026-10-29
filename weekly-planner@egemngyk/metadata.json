@@ -1,8 +1,8 @@
 {
     "uuid": "weekly-planner@egemngyk",
     "name": "Weekly Planner",
-    "description": "A weekly planner whose entries (weekly-repeating or for a specific week, with to-do, important and color options) are edited in the settings; every instance works independently. English and Turkish interface.",
-    "version": "1.2.0",
+    "description": "A weekly planner: add entries to a day with the plus button, reorder them by dragging, and give them a color, to-do and important flags. Every instance works independently. English and Turkish interface.",
+    "version": "1.3.0",
     "max-instances": "50",
     "website": "https://github.com/egemngyk",
     "license": "MIT"

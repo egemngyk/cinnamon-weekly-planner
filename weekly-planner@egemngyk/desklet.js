@@ -4,9 +4,8 @@
  *  - Model: pure data logic with no GI dependency (testable with node).
  *  - PlannerDesklet: Cinnamon UI, settings and storage.
  *
- * Entries are NOT added from the desklet itself. They are edited in Configure → Entries
- * (one list per weekday, in "repeat every week" mode or for one specific week). The data file is the
- * source of truth; the lists in the settings window are an editing view that is kept in sync with it.
+ * Entries belong to a date. The ＋ button adds a new entry at the bottom of the selected day; entries can be
+ * reordered (and moved to another day) by dragging their ≡ grip.
  *
  * Every desklet instance (desklet_id) uses its own settings file (managed by Cinnamon) and its own
  * data file: ~/.local/share/weekly-planner-desklet/<desklet_id>.json
@@ -22,21 +21,21 @@ const Pango = imports.gi.Pango;
 const Cinnamon = imports.gi.Cinnamon;
 const Mainloop = imports.mainloop;
 const Settings = imports.ui.settings;
+const ModalDialog = imports.ui.modalDialog;
 
 const DATA_DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'weekly-planner-desklet']);
 
-/* Names accepted in the "Color" column of the entry lists (English and Turkish). */
+/* Colors offered by the color picker in the entry dialog. */
+const PALETTE = ['#e5534b', '#e67e22', '#e0a030', '#f1c40f', '#6ab04c', '#3fb0a0', '#4f9dde', '#2c6fbb',
+    '#8e6ad8', '#d9609a', '#a0522d', '#7f8c9a', '#2c3e50', '#16a085', '#c0392b', '#95a5a6'];
+
+/* Color names that older versions accepted as text (only used when migrating old data files). */
 const COLOR_NAMES = {
-    blue: '#4f9dde', mavi: '#4f9dde',
-    red: '#e5534b', 'kırmızı': '#e5534b', kirmizi: '#e5534b',
-    yellow: '#e0a030', 'sarı': '#e0a030', sari: '#e0a030',
-    purple: '#8e6ad8', mor: '#8e6ad8',
-    teal: '#3fb0a0', turkuaz: '#3fb0a0',
-    gray: '#7f8c9a', grey: '#7f8c9a', gri: '#7f8c9a',
-    pink: '#d9609a', pembe: '#d9609a',
-    green: '#6ab04c', 'yeşil': '#6ab04c', yesil: '#6ab04c',
-    orange: '#e67e22', turuncu: '#e67e22',
-    navy: '#2c3e50', lacivert: '#2c3e50'
+    blue: '#4f9dde', mavi: '#4f9dde', red: '#e5534b', 'kırmızı': '#e5534b', kirmizi: '#e5534b',
+    yellow: '#e0a030', 'sarı': '#e0a030', sari: '#e0a030', purple: '#8e6ad8', mor: '#8e6ad8',
+    teal: '#3fb0a0', turkuaz: '#3fb0a0', gray: '#7f8c9a', grey: '#7f8c9a', gri: '#7f8c9a',
+    pink: '#d9609a', pembe: '#d9609a', green: '#6ab04c', 'yeşil': '#6ab04c', yesil: '#6ab04c',
+    orange: '#e67e22', turuncu: '#e67e22', navy: '#2c3e50', lacivert: '#2c3e50'
 };
 
 /* ------------------------------------------------------------------ */
@@ -51,14 +50,19 @@ const I18N = {
         days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
         daysS: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         shortDate: function (d) { return pad(d.getMonth() + 1) + '/' + pad(d.getDate()); },
-        dueLabel: function (d, mon) { return 'due ' + mon + ' ' + d; },
         today: 'Today',
         menuWPlus: 'Width +60', menuWMinus: 'Width −60', menuHPlus: 'Height +60', menuHMinus: 'Height −60',
         menuGoto: 'Go to this week',
         renderErr: 'Display error (see the log).',
         allHidden: 'All days are hidden.\nEnable some in Configure → Entries.',
-        invalidDate: 'Invalid date — use YYYY-MM-DD',
-        editingWeek: 'Editing'
+        cancel: 'Cancel', save: 'Save', del: 'Delete',
+        newEntry: 'New entry', editEntry: 'Edit entry',
+        fTitle: 'Title', fNotes: 'Notes', fColor: 'Color', fOptions: 'Type',
+        hintTitle: 'Title', hintNotes: 'Description / notes (optional)',
+        colorDefault: 'Default', toDo: 'To-do', important: '★ Important',
+        errTitle: 'Title is required.',
+        delEntry: 'Delete entry',
+        confirmDel: function (t) { return 'Delete “' + t + '”?'; }
     },
     tr: {
         dayFirst: true,
@@ -67,14 +71,19 @@ const I18N = {
         days: ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'],
         daysS: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'],
         shortDate: function (d) { return pad(d.getDate()) + '.' + pad(d.getMonth() + 1); },
-        dueLabel: function (d, mon) { return 'teslim ' + d + ' ' + mon; },
         today: 'Bugün',
         menuWPlus: 'Genişlik +60', menuWMinus: 'Genişlik −60', menuHPlus: 'Yükseklik +60', menuHMinus: 'Yükseklik −60',
         menuGoto: 'Bu haftaya git',
         renderErr: 'Görüntüleme hatası (günlüğe bakın).',
         allHidden: 'Tüm günler gizli.\nYapılandır → Entries bölümünden açın.',
-        invalidDate: 'Geçersiz tarih — YYYY-AA-GG kullanın',
-        editingWeek: 'Düzenlenen'
+        cancel: 'İptal', save: 'Kaydet', del: 'Sil',
+        newEntry: 'Yeni kayıt', editEntry: 'Kaydı düzenle',
+        fTitle: 'Başlık', fNotes: 'Not', fColor: 'Renk', fOptions: 'Tür',
+        hintTitle: 'Başlık', hintNotes: 'Açıklama / not (isteğe bağlı)',
+        colorDefault: 'Varsayılan', toDo: 'Yapılacak', important: '★ Önemli',
+        errTitle: 'Başlık gerekli.',
+        delEntry: 'Kaydı sil',
+        confirmDel: function (t) { return '“' + t + '” silinsin mi?'; }
     }
 };
 
@@ -119,6 +128,17 @@ function resolveColor(s) {
     if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+\s*)?\)$/.test(s)) return s;
     return null;
 }
+/* Color text (name, #rgb, #rrggbb, rgb()/rgba()) -> usable color string, or null. */
+function resolveColor(s) {
+    s = String(s === undefined || s === null ? '' : s).trim().toLowerCase();
+    if (!s) return null;
+    if (COLOR_NAMES[s]) return COLOR_NAMES[s];
+    const m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(s);
+    if (m) return '#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3];
+    if (/^#[0-9a-f]{6}$/.test(s)) return s;
+    if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+\s*)?\)$/.test(s)) return s;
+    return null;
+}
 function lum(p) {
     const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
     return 0.2126 * f(p[0]) + 0.7152 * f(p[1]) + 0.0722 * f(p[2]);
@@ -152,112 +172,108 @@ function formatRange(s, fmt, lang) {
     return names[sm] + ' ' + sd + ', ' + sy + ' – ' + names[em] + ' ' + ed + ', ' + ey;
 }
 
+function longDate(d, lang) {
+    const lg = I18N[lang] || I18N.en;
+    return lg.days[wd(d)] + ' · ' + (lg.dayFirst
+        ? d.getDate() + ' ' + lg.months[d.getMonth()] + ' ' + d.getFullYear()
+        : lg.months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear());
+}
+
 /* ------------------------------------------------------------------ */
-/* Model: weekly entries, per-week entries and done state              */
+/* Model: entries per date                                             */
 /* ------------------------------------------------------------------ */
 /*
  * data = {
- *   version: 2,
- *   ui: { weekOffset, editWeek },          // editWeek: Monday (ISO) of the week edited in Configure → Entries
- *   weekly: [ [entry...] x 7 ],            // repeat every week; index 0 = Monday
- *   weeks: { "<Monday ISO>": [ [entry...] x 7 ] },   // entries of one specific week only
- *   occ: { "<entryId>|<YYYY-MM-DD>": { done: true } }   // done state belongs to that date's occurrence
+ *   version: 3,
+ *   ui: { weekOffset, selected },          // selected: ISO date of the day that the ＋ button adds to (or null)
+ *   days: { "<YYYY-MM-DD>": [ entry, ... ] }   // the array order is the display order
  * }
- * entry = { id, title, notes, color, important, todo, due, [from, to, skipDates] }   (from/to/skipDates only come from migration)
+ * entry = { id, title, notes, color ('' = default / '#rrggbb'), important, todo, done }
  */
 const Model = {
-    emptyWeek: function () { return [[], [], [], [], [], [], []]; },
-
     defaults: function () {
-        return { version: 2, ui: { weekOffset: 0, editWeek: null }, weekly: Model.emptyWeek(), weeks: {}, occ: {} };
+        return { version: 3, ui: { weekOffset: 0, selected: null }, days: {} };
     },
 
     toBool: function (v) { return v === true || v === 'true' || v === 1; },
-
-    /* A row of the settings list (or any loose object) -> normalized entry fields. */
-    rowToFields: function (row) {
-        row = row && typeof row === 'object' ? row : {};
-        const due = String(row.due === undefined || row.due === null ? '' : row.due).trim();
-        return {
-            title: String(row.title === undefined || row.title === null ? '' : row.title).trim().slice(0, 200) || 'Untitled',
-            notes: String(row.notes === undefined || row.notes === null ? '' : row.notes).trim().slice(0, 2000),
-            todo: Model.toBool(row.todo),
-            important: Model.toBool(row.important),
-            color: String(row.color === undefined || row.color === null ? '' : row.color).trim().slice(0, 40),
-            due: parseIso(due) ? due : ''
-        };
-    },
-    fieldsToRow: function (e) { return Model.rowToFields(e); },
+    str: function (v) { return v === undefined || v === null ? '' : String(v); },
 
     cleanEntry: function (it) {
         if (!it || typeof it !== 'object') return null;
-        const e = Model.rowToFields(it);
-        e.id = typeof it.id === 'string' && it.id ? it.id : newId();
-        if (parseIso(it.from)) e.from = it.from;
-        if (parseIso(it.to)) e.to = it.to;
-        if (Array.isArray(it.skipDates)) {
-            const s = it.skipDates.filter(function (x) { return !!parseIso(x); });
-            if (s.length) e.skipDates = s;
-        }
-        return e;
+        const title = Model.str(it.title).trim().slice(0, 200);
+        if (!title) return null;
+        return {
+            id: typeof it.id === 'string' && it.id ? it.id : newId(),
+            title: title,
+            notes: Model.str(it.notes).trim().slice(0, 2000),
+            color: resolveColor(it.color) || '',
+            important: Model.toBool(it.important),
+            todo: Model.toBool(it.todo),
+            done: Model.toBool(it.done)
+        };
     },
 
-    cleanWeek: function (w) {
-        const r = Model.emptyWeek();
-        if (!Array.isArray(w)) return r;
-        for (let i = 0; i < 7; i++) {
-            if (Array.isArray(w[i])) r[i] = w[i].map(Model.cleanEntry).filter(Boolean);
-        }
-        return r;
+    push: function (d, date, e) {
+        (d.days[date] || (d.days[date] = [])).push(e);
     },
 
-    putDated: function (d, e, dateStr) {
-        const dt = parseIso(dateStr);
-        const mon = iso(mondayOf(dt));
-        if (!d.weeks[mon]) d.weeks[mon] = Model.emptyWeek();
-        d.weeks[mon][wd(dt)].push(e);
-    },
-
-    /* Version 1 (items / occ with once + weekly rules) -> version 2. */
-    migrate: function (raw) {
+    /*
+     * Data files of versions 1 and 2 (weekly rules / weekly lists / per-week lists) -> version 3.
+     * Weekly entries no longer exist, so they are copied onto the dates of a window around today.
+     */
+    migrateOld: function (raw) {
         const d = Model.defaults();
         const occ = raw.occ && typeof raw.occ === 'object' ? raw.occ : {};
-        const base = function (it, over) {
-            const src = Object.assign({}, it, over || {});
-            const e = Model.rowToFields(src);
-            e.todo = true; // every v1 entry had a completion checkbox
-            e.id = it.id;
-            return e;
+        const doneOn = function (id, date) { const x = occ[id + '|' + date]; return !!(x && typeof x === 'object' && x.done); };
+        const lo = addDays(mondayOf(today()), -56), hi = addDays(mondayOf(today()), 364);
+        const put = function (date, src, over, done) {
+            const e = Model.cleanEntry(Object.assign({}, src, over || {}, {
+                id: newId(), todo: src.todo === undefined ? true : src.todo, done: done
+            }));
+            if (e) Model.push(d, date, e);
         };
-        (Array.isArray(raw.items) ? raw.items : []).forEach(function (it) {
-            if (!it || typeof it.id !== 'string' || typeof it.title !== 'string') return;
-            if (it.kind === 'once' && parseIso(it.date)) {
-                Model.putDated(d, base(it), it.date);
-                const x = occ[it.id + '|' + it.date];
-                if (x && x.done) d.occ[it.id + '|' + it.date] = { done: true };
-            } else if (it.kind === 'weekly' && it.weekday >= 0 && it.weekday <= 6 && parseIso(it.startDate)) {
-                const e = base(it);
-                e.from = it.startDate;
-                if (parseIso(it.endDate)) e.to = it.endDate;
-                d.weekly[it.weekday | 0].push(e);
-                Object.keys(occ).forEach(function (k) {
-                    if (k.indexOf(it.id + '|') !== 0) return;
-                    const date = k.slice(it.id.length + 1), x = occ[k];
-                    if (!x || typeof x !== 'object' || !parseIso(date)) return;
-                    if (x.skip || x.over) {
-                        e.skipDates = (e.skipDates || []).concat([date]);
-                        if (x.over && !x.skip) { // an edited single occurrence becomes a one-week entry
-                            const n = base(it, x.over);
-                            n.id = newId();
-                            Model.putDated(d, n, date);
-                            if (x.done) d.occ[n.id + '|' + date] = { done: true };
-                        }
-                    } else if (x.done) {
-                        d.occ[k] = { done: true };
-                    }
-                });
+        const spread = function (src, weekday, from, to, skip) {
+            for (let t = addDays(lo, weekday); t <= hi; t = addDays(t, 7)) {
+                const date = iso(t);
+                if ((from && date < from) || (to && date > to) || (skip && skip.indexOf(date) >= 0)) continue;
+                put(date, src, null, doneOn(src.id, date));
             }
-        });
+        };
+        if (raw.version === 2) {
+            (Array.isArray(raw.weekly) ? raw.weekly : []).forEach(function (list, i) {
+                (Array.isArray(list) ? list : []).forEach(function (e) {
+                    if (e && typeof e === 'object') spread(e, i, e.from, e.to, e.skipDates);
+                });
+            });
+            Object.keys(raw.weeks && typeof raw.weeks === 'object' ? raw.weeks : {}).sort().forEach(function (mon) {
+                const m = parseIso(mon);
+                if (!m || !Array.isArray(raw.weeks[mon])) return;
+                raw.weeks[mon].forEach(function (list, i) {
+                    (Array.isArray(list) ? list : []).forEach(function (e) {
+                        if (!e || typeof e !== 'object' || i > 6) return;
+                        const date = iso(addDays(m, i));
+                        put(date, e, null, doneOn(e.id, date));
+                    });
+                });
+            });
+        } else {
+            (Array.isArray(raw.items) ? raw.items : []).forEach(function (it) {
+                if (!it || typeof it.id !== 'string' || typeof it.title !== 'string') return;
+                if (it.kind === 'once' && parseIso(it.date)) {
+                    put(it.date, it, null, doneOn(it.id, it.date));
+                } else if (it.kind === 'weekly' && it.weekday >= 0 && it.weekday <= 6 && parseIso(it.startDate)) {
+                    const skip = [];
+                    Object.keys(occ).forEach(function (k) {
+                        if (k.indexOf(it.id + '|') !== 0) return;
+                        const date = k.slice(it.id.length + 1), x = occ[k];
+                        if (!x || typeof x !== 'object' || !parseIso(date)) return;
+                        if (x.skip || x.over) skip.push(date);
+                        if (x.over && !x.skip) put(date, it, x.over, !!x.done);
+                    });
+                    spread(it, it.weekday | 0, it.startDate, parseIso(it.endDate) ? it.endDate : null, skip);
+                }
+            });
+        }
         return d;
     },
 
@@ -265,120 +281,82 @@ const Model = {
     normalize: function (raw) {
         if (!raw || typeof raw !== 'object') return Model.defaults();
         let d;
-        if (raw.version === 2) {
+        if (raw.version === 3) {
             d = Model.defaults();
-            d.weekly = Model.cleanWeek(raw.weekly);
-            if (raw.weeks && typeof raw.weeks === 'object') {
-                Object.keys(raw.weeks).forEach(function (k) {
-                    const dt = parseIso(k);
-                    if (!dt || wd(dt) !== 0) return;
-                    const w = Model.cleanWeek(raw.weeks[k]);
-                    if (w.some(function (l) { return l.length; })) d.weeks[k] = w;
-                });
-            }
-            if (raw.occ && typeof raw.occ === 'object') {
-                Object.keys(raw.occ).forEach(function (k) {
-                    const x = raw.occ[k];
-                    if (x && typeof x === 'object' && x.done) d.occ[k] = { done: true };
+            if (raw.days && typeof raw.days === 'object') {
+                Object.keys(raw.days).forEach(function (k) {
+                    if (!parseIso(k) || !Array.isArray(raw.days[k])) return;
+                    const list = raw.days[k].map(Model.cleanEntry).filter(Boolean);
+                    if (list.length) d.days[k] = list;
                 });
             }
         } else {
-            d = Model.migrate(raw);
+            d = Model.migrateOld(raw);
         }
-        if (raw.ui && typeof raw.ui.weekOffset === 'number' && isFinite(raw.ui.weekOffset)) {
-            d.ui.weekOffset = Math.max(-5000, Math.min(5000, Math.round(raw.ui.weekOffset)));
+        const ui = raw.ui && typeof raw.ui === 'object' ? raw.ui : {};
+        if (typeof ui.weekOffset === 'number' && isFinite(ui.weekOffset)) {
+            d.ui.weekOffset = Math.max(-5000, Math.min(5000, Math.round(ui.weekOffset)));
         }
-        if (raw.ui && parseIso(raw.ui.editWeek) && wd(parseIso(raw.ui.editWeek)) === 0) d.ui.editWeek = raw.ui.editWeek;
+        if (raw.version === 3 && parseIso(ui.selected)) d.ui.selected = ui.selected;
         return d;
     },
 
-    occurrence: function (data, it, date) {
-        const key = it.id + '|' + date;
-        const x = data.occ[key];
-        return { item: it, date: date, key: key, f: it, done: !!(x && x.done) };
-    },
-
-    /* Occurrences for the 7 days starting at `start` (a Monday): weekly entries first, then this week's own entries. */
-    occurrences: function (data, start) {
+    /* The entries of the 7 days starting at `start` (a Monday). */
+    week: function (data, start) {
         const dates = [], days = [];
-        const wk = data.weeks[iso(start)];
         for (let i = 0; i < 7; i++) {
             const date = iso(addDays(start, i));
             dates.push(date);
-            const list = [];
-            data.weekly[i].forEach(function (it) {
-                if (it.from && date < it.from) return;
-                if (it.to && date > it.to) return;
-                if (it.skipDates && it.skipDates.indexOf(date) >= 0) return;
-                list.push(Model.occurrence(data, it, date));
-            });
-            if (wk) wk[i].forEach(function (it) { list.push(Model.occurrence(data, it, date)); });
-            days.push(list);
+            days.push(data.days[date] || []);
         }
         return { dates: dates, days: days };
     },
 
-    toggleDone: function (data, o) {
-        if (data.occ[o.key]) delete data.occ[o.key]; else data.occ[o.key] = { done: true };
+    find: function (data, id) {
+        const dates = Object.keys(data.days);
+        for (let k = 0; k < dates.length; k++) {
+            const list = data.days[dates[k]];
+            for (let i = 0; i < list.length; i++) {
+                if (list[i].id === id) return { date: dates[k], index: i, entry: list[i] };
+            }
+        }
+        return null;
     },
 
-    dropOcc: function (data, id) {
-        const p = id + '|';
-        Object.keys(data.occ).forEach(function (k) { if (k.indexOf(p) === 0) delete data.occ[k]; });
+    /* Adds a new entry at the bottom of the day. */
+    add: function (data, date, fields) {
+        const e = Model.cleanEntry(Object.assign({}, fields, { id: newId(), done: false }));
+        if (e) Model.push(data, date, e);
+        return e;
     },
+
+    update: function (data, e, fields) {
+        const n = Model.cleanEntry(Object.assign({}, e, fields, { id: e.id }));
+        if (n) Object.assign(e, n);
+    },
+
+    remove: function (data, id) {
+        const f = Model.find(data, id);
+        if (!f) return;
+        data.days[f.date].splice(f.index, 1);
+        if (!data.days[f.date].length) delete data.days[f.date];
+    },
+
+    toggleDone: function (e) { e.done = !e.done; },
 
     /*
-     * Turns the rows of a settings list into entries. Rows are matched to the existing entries (so ids,
-     * done state and hidden fields survive): first by identical title, then leftovers by position
-     * (that is a renamed entry).
+     * Moves an entry to `toDate` so that it ends up at position `toIndex` of that day's list
+     * (counted without the entry itself). Returns true when the order actually changed.
      */
-    reconcile: function (oldList, rows) {
-        const clean = (Array.isArray(rows) ? rows : []).map(Model.rowToFields);
-        const used = oldList.map(function () { return false; });
-        const match = clean.map(function () { return -1; });
-        clean.forEach(function (r, i) {
-            for (let j = 0; j < oldList.length; j++) {
-                if (!used[j] && oldList[j].title === r.title) { used[j] = true; match[i] = j; break; }
-            }
-        });
-        const free = [];
-        used.forEach(function (u, j) { if (!u) free.push(j); });
-        clean.forEach(function (r, i) { if (match[i] < 0 && free.length) match[i] = free.shift(); });
-        return clean.map(function (r, i) {
-            return match[i] >= 0 ? Object.assign({}, oldList[match[i]], r) : Object.assign({ id: newId() }, r);
-        });
-    },
-
-    setWeekDay: function (data, monday, i, list) {
-        let w = data.weeks[monday];
-        if (!w) {
-            if (!list.length) return;
-            w = data.weeks[monday] = Model.emptyWeek();
-        }
-        w[i] = list;
-        if (w.every(function (l) { return !l.length; })) delete data.weeks[monday];
-    },
-
-    dayList: function (data, monday, i) {
-        if (monday === null) return data.weekly[i];
-        const w = data.weeks[monday];
-        return w ? w[i] : [];
-    },
-
-    /* Applies the rows of one day list (monday === null: weekly list). Returns true when something changed. */
-    applyRows: function (data, monday, i, rows) {
-        const cur = Model.dayList(data, monday, i);
-        const nxt = Model.reconcile(cur, rows);
-        if (JSON.stringify(cur) === JSON.stringify(nxt)) return false;
-        const keep = {};
-        nxt.forEach(function (e) { keep[e.id] = true; });
-        cur.forEach(function (e) { if (!keep[e.id]) Model.dropOcc(data, e.id); });
-        if (monday === null) data.weekly[i] = nxt; else Model.setWeekDay(data, monday, i, nxt);
-        return true;
-    },
-
-    rowsKey: function (rows) {
-        return JSON.stringify((Array.isArray(rows) ? rows : []).map(Model.rowToFields));
+    move: function (data, id, toDate, toIndex) {
+        const f = Model.find(data, id);
+        if (!f) return false;
+        data.days[f.date].splice(f.index, 1);
+        if (!data.days[f.date].length) delete data.days[f.date];
+        const dst = data.days[toDate] || (data.days[toDate] = []);
+        const i = Math.max(0, Math.min(dst.length, toIndex));
+        dst.splice(i, 0, f.entry);
+        return !(f.date === toDate && i === f.index);
     }
 };
 
@@ -386,9 +364,58 @@ const Model = {
 /* UI helpers                                                          */
 /* ------------------------------------------------------------------ */
 
+function chipStyle(on, color, swatch) {
+    if (swatch) {
+        return 'width:18px; height:18px; border-radius:9px; background-color:' + color +
+            '; border:2px solid ' + (on ? '#ffffff' : 'rgba(255,255,255,0.15)') + ';';
+    }
+    return 'padding:3px 9px; border-radius:11px; color:#ffffff; border:1px solid ' +
+        (color || 'rgba(255,255,255,0.35)') + '; background-color:' +
+        (on ? (color ? rgba(color, 0.7) : 'rgba(255,255,255,0.28)') : 'rgba(255,255,255,0.06)') + ';';
+}
+
+/* Single choice. options: [{label, value, color?, swatch?}] */
+function chipRow(options, getVal, setVal, perRow) {
+    const box = new St.BoxLayout({ vertical: true, style: 'spacing:4px;' });
+    const btns = [];
+    const refresh = function () {
+        btns.forEach(function (b) { b.btn.style = chipStyle(getVal() === b.value, b.color, b.swatch); });
+    };
+    let row = null;
+    options.forEach(function (o, i) {
+        if (i % perRow === 0) { row = new St.BoxLayout({ style: 'spacing:4px;' }); box.add_actor(row); }
+        const btn = new St.Button({ label: o.swatch ? '' : o.label, reactive: true, can_focus: true });
+        btn.connect('clicked', function () { setVal(o.value); refresh(); });
+        btns.push({ btn: btn, value: o.value, color: o.color, swatch: !!o.swatch });
+        row.add_actor(btn);
+    });
+    refresh();
+    return box;
+}
+
+/* On/off chip. */
+function toggleChip(label, getVal, setVal, color) {
+    const btn = new St.Button({ label: label, reactive: true, can_focus: true });
+    const refresh = function () { btn.style = chipStyle(!!getVal(), color, false); };
+    btn.connect('clicked', function () { setVal(!getVal()); refresh(); });
+    refresh();
+    return btn;
+}
+
+function field(title, widget) {
+    const b = new St.BoxLayout({ vertical: true, style: 'spacing:3px; padding-top:7px;' });
+    b.add_actor(new St.Label({ text: title, style: 'font-size:11px; opacity:170;' }));
+    b.add_actor(widget);
+    return b;
+}
+
 /* x_fill/y_fill don't exist in some Cinnamon versions; passing them to the constructor would crash loading, so they are set here and failures are ignored. */
 function fillActor(a) {
     try { a.x_fill = true; a.y_fill = true; } catch (e) { /* ignore */ }
+}
+
+function mkEntry(text, hint, width) {
+    return new St.Entry({ text: text || '', hint_text: hint || '', can_focus: true, style: 'min-width:' + (width || 280) + 'px;' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -399,14 +426,7 @@ const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width
     'bgColor', 'textColor', 'accentColor', 'dayHeaderColor', 'borderColor', 'importantColor',
     'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language',
     'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6',
-    'showNotes', 'showDue', 'showCheckbox', 'showStar'];
-
-/* Settings list widgets: [kind, weekday index, settings key]. 'weekly' = repeat every week, 'week' = the week being edited. */
-const LIST_KEYS = [];
-for (let i = 0; i < 7; i++) {
-    LIST_KEYS.push(['weekly', i, 'weeklyItems' + i]);
-    LIST_KEYS.push(['week', i, 'weekItems' + i]);
-}
+    'showNotes', 'showCheckbox', 'showStar'];
 
 function PlannerDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
@@ -421,7 +441,10 @@ PlannerDesklet.prototype = {
         this._saveTimer = null;
         this._cfgIdle = null;
         this._dayTimer = null;
-        this._suppressUntil = 0;
+        this._dialog = null;
+        this._layout = [];
+        this._drag = null;
+        this._dragTimer = null;
         this._rs = null;
         this._rsId = null;
         this._rsTimer = null;
@@ -443,20 +466,12 @@ PlannerDesklet.prototype = {
         CFG_KEYS.forEach(function (k) {
             this.settings.bindProperty(Settings.BindingDirection.IN, k, 'cfg_' + k, this._onCfgChanged.bind(this));
         }, this);
-        LIST_KEYS.forEach(function (k) {
-            this.settings.bindProperty(Settings.BindingDirection.IN, k[2], 'cfg_' + k[2], function () {
-                this._onListChanged(k[0], k[1]);
-            }.bind(this));
-        }, this);
 
         this._loadData();
-        if (!this.data.ui.editWeek) this.data.ui.editWeek = iso(mondayOf(today()));
         this._buildUi();
         this._applyTheme();
         this._render();
         this._setupMenu();
-        this._pushLists();
-        this._updateWeekFields();
         this._todayStr = iso(today());
         this._dayTimer = Mainloop.timeout_add_seconds(60, this._checkDay.bind(this));
     },
@@ -479,7 +494,14 @@ PlannerDesklet.prototype = {
             } catch (e) { global.logError('[weekly-planner] could not move corrupt file: ' + e); }
             raw = tryRead(path + '~');
         }
+        if (raw && raw.version !== 3) { // older format: keep a copy of the original, then convert
+            try {
+                Gio.File.new_for_path(path).copy(Gio.File.new_for_path(path + '.pre-v3'),
+                    Gio.FileCopyFlags.OVERWRITE, null, null);
+            } catch (e) { global.logError('[weekly-planner] could not back up the old data file: ' + e); }
+        }
         this.data = Model.normalize(raw || null);
+        if (raw && raw.version !== 3) this._saveNow();
     },
 
     _scheduleSave: function () {
@@ -505,79 +527,6 @@ PlannerDesklet.prototype = {
     _changed: function () {
         this._scheduleSave();
         this._render();
-    },
-
-    /* ---------------- entry lists (Configure → Entries) ---------------- */
-
-    _getValue: function (key) {
-        try { return this.settings.getValue(key); } catch (e) { return undefined; }
-    },
-    _setValue: function (key, value) {
-        try { this.settings.setValue(key, value); } catch (e) { global.logError('[weekly-planner] could not set ' + key + ': ' + e); }
-    },
-
-    _editMonday: function () { return parseIso(this.data.ui.editWeek) || mondayOf(today()); },
-
-    /* A list in the settings window changed: fold it into the model. */
-    _onListChanged: function (kind, i) {
-        if (Date.now() < this._suppressUntil) return; // echo of our own _pushLists
-        try {
-            const key = (kind === 'weekly' ? 'weeklyItems' : 'weekItems') + i;
-            const monday = kind === 'weekly' ? null : iso(this._editMonday());
-            if (Model.applyRows(this.data, monday, i, this._getValue(key))) this._changed();
-        } catch (e) {
-            global.logError('[weekly-planner] list sync error: ' + e);
-        }
-    },
-
-    /* Reads every list from the settings (used before navigating to another week, so nothing is lost). */
-    _syncAllLists: function () {
-        const mon = iso(this._editMonday());
-        let any = false;
-        LIST_KEYS.forEach(function (k) {
-            const rows = this._getValue(k[2]);
-            if (rows === undefined) return;
-            if (Model.applyRows(this.data, k[0] === 'weekly' ? null : mon, k[1], rows)) any = true;
-        }, this);
-        if (any) this._changed();
-    },
-
-    /* Model -> settings lists. */
-    _pushLists: function () {
-        this._suppressUntil = Date.now() + 700;
-        const mon = iso(this._editMonday());
-        LIST_KEYS.forEach(function (k) {
-            const rows = Model.dayList(this.data, k[0] === 'weekly' ? null : mon, k[1]).map(Model.fieldsToRow);
-            if (Model.rowsKey(this._getValue(k[2])) !== Model.rowsKey(rows)) this._setValue(k[2], rows);
-        }, this);
-    },
-
-    _updateWeekFields: function () {
-        const mon = this._editMonday();
-        const info = this._t('editingWeek') + ': ' + formatRange(mon, 'long', this.cfg_language);
-        if (this._getValue('weekDate') !== iso(mon)) this._setValue('weekDate', iso(mon));
-        if (this._getValue('weekInfo') !== info) this._setValue('weekInfo', info);
-    },
-
-    _setEditWeek: function (monday) {
-        this._syncAllLists();
-        this.data.ui.editWeek = iso(monday);
-        // show the edited week on the desklet as well
-        this.data.ui.weekOffset = Math.max(-5000, Math.min(5000,
-            Math.round((monday.getTime() - mondayOf(today()).getTime()) / (7 * 86400000))));
-        this._pushLists();
-        this._updateWeekFields();
-        this._changed();
-    },
-
-    /* Callbacks of the buttons in Configure → Entries (called by name from the settings window). */
-    onWeekPrev: function () { this._setEditWeek(addDays(this._editMonday(), -7)); },
-    onWeekNext: function () { this._setEditWeek(addDays(this._editMonday(), 7)); },
-    onWeekToday: function () { this._setEditWeek(mondayOf(today())); },
-    onWeekGo: function () {
-        const d = parseIso(String(this._getValue('weekDate') || '').trim());
-        if (!d) { this._setValue('weekInfo', this._t('invalidDate')); return; }
-        this._setEditWeek(mondayOf(d));
     },
 
     /* ---------------- settings / theme ---------------- */
@@ -609,7 +558,7 @@ PlannerDesklet.prototype = {
         this._root.style = 'background-color:' + t.bg + '; border:' + this.cfg_borderWidth + 'px solid ' + t.border +
             '; border-radius:' + this.cfg_borderRadius + 'px; padding:' + this._px(8) + 'px; color:' + t.text + '; font-size:' + t.fs + 'px;';
         const navStyle = 'color:' + t.text + '; padding:' + this._px(2) + 'px ' + this._px(8) + 'px; border-radius:' + this._px(6) + 'px; font-size:' + Math.round(t.fs * 1.25) + 'px;';
-        [this._btnPrev, this._btnNext, this._btnToday].forEach(function (b) { b.style = navStyle; });
+        [this._btnPrev, this._btnNext, this._btnToday, this._btnAdd].forEach(function (b) { b.style = navStyle; });
         this._title.style = 'font-weight:bold; color:' + t.text + '; font-size:' + Math.round(t.fs * 1.1) + 'px;';
         this._head.style = 'spacing:' + this._px(4) + 'px; padding-bottom:' + this._px(6) + 'px;';
         (this._handleList || []).forEach(function (h) { h(false); });
@@ -669,11 +618,13 @@ PlannerDesklet.prototype = {
         this._btnPrev = mk('‹', function () { this._shiftWeek(-1); }.bind(this));
         this._btnNext = mk('›', function () { this._shiftWeek(1); }.bind(this));
         this._btnToday = mk('Today', function () { this._gotoWeek(0); }.bind(this));
+        this._btnAdd = mk('＋', function () { this._openEditor(null, this._targetDate()); }.bind(this));
         this._title = new St.Label({ text: '', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
         head.add_actor(this._btnPrev);
         head.add_actor(this._title);
         head.add_actor(this._btnNext);
         head.add_actor(this._btnToday);
+        head.add_actor(this._btnAdd);
         this._root.add_actor(head);
 
         // middle section: scroll area + right-edge handle
@@ -788,7 +739,7 @@ PlannerDesklet.prototype = {
         }
     },
 
-    /* ---------------- week navigation (display) ---------------- */
+    /* ---------------- week navigation / selected day ---------------- */
 
     _weekStart: function () { return addDays(mondayOf(today()), 7 * this.data.ui.weekOffset); },
     _shiftWeek: function (n) { this.data.ui.weekOffset += n; this._changed(); },
@@ -800,6 +751,29 @@ PlannerDesklet.prototype = {
         return r;
     },
 
+    /* Index (0..6) of the day of the shown week that the ＋ button adds to. */
+    _targetIndex: function () {
+        const s = this._weekStart();
+        const inWeek = function (d) {
+            if (!d) return -1;
+            const diff = Math.round((d.getTime() - s.getTime()) / 86400000);
+            return diff >= 0 && diff < 7 ? diff : -1;
+        };
+        const sel = parseIso(this.data.ui.selected);
+        let i = inWeek(sel);
+        if (i < 0) i = inWeek(today());
+        if (i < 0) i = sel ? wd(sel) : 0;
+        const vis = this._visibleDays();
+        if (vis.length && vis.indexOf(i) < 0) i = vis[0]; // that day is hidden: use the first visible day
+        return i;
+    },
+    _targetDate: function () { return iso(addDays(this._weekStart(), this._targetIndex())); },
+
+    _selectDay: function (date) {
+        this.data.ui.selected = date;
+        this._changed();
+    },
+
     /* ---------------- rendering ---------------- */
 
     _render: function () {
@@ -807,9 +781,10 @@ PlannerDesklet.prototype = {
             this._todayStr = iso(today());
             const start = this._weekStart();
             this._title.set_text(formatRange(start, this.cfg_dateFormat, this.cfg_language));
-            const occ = Model.occurrences(this.data, start);
+            const week = Model.week(this.data, start);
+            this._layout = [];
             this._body.destroy_all_children();
-            if (this.cfg_layoutMode === 'rows') this._renderRows(occ); else this._renderCols(occ);
+            if (this.cfg_layoutMode === 'rows') this._renderRows(week); else this._renderCols(week);
         } catch (e) {
             global.logError('[weekly-planner] render error: ' + e);
             try {
@@ -819,14 +794,16 @@ PlannerDesklet.prototype = {
         }
     },
 
-    _dayBox: function (isToday) {
+    _dayButton: function (date, isToday, isTarget) {
         const t = this._theme;
-        const box = new St.Bin({ style_class: 'wp-day', y_expand: true });
-        fillActor(box);
-        box.style = isToday && this.cfg_highlightToday
-            ? 'background-color:' + rgba(t.accent, 0.16) + '; border:1px solid ' + rgba(t.accent, 0.7) + ';'
-            : 'border:1px solid ' + rgba(this.cfg_borderColor, 0.35) + ';';
-        return box;
+        const btn = new St.Button({ style_class: 'wp-day', reactive: true, can_focus: false, y_expand: true });
+        fillActor(btn);
+        const tint = isToday && this.cfg_highlightToday;
+        const border = isTarget ? this._px(2) + 'px solid ' + rgba(t.accent, 0.95)
+            : (tint ? '1px solid ' + rgba(t.accent, 0.7) : '1px solid ' + rgba(this.cfg_borderColor, 0.35));
+        btn.style = (tint ? 'background-color:' + rgba(t.accent, 0.16) + '; ' : '') + 'border:' + border + ';';
+        btn.connect('clicked', function () { this._selectDay(date); }.bind(this));
+        return btn;
     },
 
     _dayHeader: function (i, date, isToday, horizontalRow) {
@@ -846,7 +823,7 @@ PlannerDesklet.prototype = {
         return box;
     },
 
-    _renderCols: function (occ) {
+    _renderCols: function (week) {
         // inner padding (16) + border + right handle (12) + vertical scrollbar allowance (22)
         const pad2 = this._px(16) + 2 * this.cfg_borderWidth + this._px(12) + this._px(22);
         const gap = this._px(4);
@@ -855,65 +832,76 @@ PlannerDesklet.prototype = {
         if (!vis.length) { this._body.add_actor(new St.Label({ text: this._t('allHidden') })); return; }
         const colW = Math.max(this._px(70), Math.floor((this.cfg_width - pad2 - (vis.length - 1) * gap) / vis.length));
         const cols = new St.BoxLayout({ style: 'spacing:' + gap + 'px;' });
-        const todayStr = this._todayStr;
+        const todayStr = this._todayStr, target = this._targetIndex();
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
-            const date = occ.dates[i];
-            const box = this._dayBox(date === todayStr);
-            box.set_width(colW);
+            const date = week.dates[i];
+            const btn = this._dayButton(date, date === todayStr, i === target);
+            btn.set_width(colW);
+            const rec = { date: date, box: btn, items: [] };
+            this._layout.push(rec);
             const col = new St.BoxLayout({ vertical: true, style: 'spacing:' + (this.cfg_compact ? 2 : 4) + 'px;' });
             col.add_actor(this._dayHeader(i, date, date === todayStr, false));
-            occ.days[i].forEach(function (o) { col.add_actor(this._makeItem(o)); }, this);
-            box.set_child(col);
-            cols.add_actor(box);
+            week.days[i].forEach(function (e) { col.add_actor(this._makeItem(e, date, rec)); }, this);
+            btn.set_child(col);
+            cols.add_actor(btn);
         }
         this._body.add_actor(cols);
     },
 
-    _renderRows: function (occ) {
+    _renderRows: function (week) {
         const vis = this._visibleDays();
         if (!vis.length) { this._body.add_actor(new St.Label({ text: this._t('allHidden') })); return; }
         const rows = new St.BoxLayout({ vertical: true, style: 'spacing:4px;' });
-        const todayStr = this._todayStr;
+        const todayStr = this._todayStr, target = this._targetIndex();
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
-            const date = occ.dates[i];
-            const box = this._dayBox(date === todayStr);
+            const date = week.dates[i];
+            const btn = this._dayButton(date, date === todayStr, i === target);
+            const rec = { date: date, box: btn, items: [] };
+            this._layout.push(rec);
             const row = new St.BoxLayout({ style: 'spacing:8px;' });
             row.add_actor(this._dayHeader(i, date, date === todayStr, true));
             const list = new St.BoxLayout({ vertical: true, x_expand: true, style: 'spacing:' + (this.cfg_compact ? 2 : 4) + 'px;' });
-            occ.days[i].forEach(function (o) { list.add_actor(this._makeItem(o)); }, this);
+            week.days[i].forEach(function (e) { list.add_actor(this._makeItem(e, date, rec)); }, this);
             row.add_actor(list);
-            box.set_child(row);
-            rows.add_actor(box);
+            btn.set_child(row);
+            rows.add_actor(btn);
         }
         this._body.add_actor(rows);
     },
 
-    _colorOf: function (f) {
-        return resolveColor(f.color) || this._theme.accent;
-    },
-
-    _makeItem: function (o) {
-        const t = this._theme, f = o.f, compact = !!this.cfg_compact;
-        const color = this._colorOf(f);
+    _makeItem: function (e, date, rec) {
+        const t = this._theme, compact = !!this.cfg_compact;
+        const color = e.color || t.accent;
         const ds = this.cfg_doneStyle;
-        const todo = !!f.todo;
-        const done = todo && o.done;
-        const box = new St.Bin({ x_expand: true });
-        fillActor(box);
-        const edge = f.important ? t.imp : color;
-        box.style = 'border-left:' + this._px(3) + 'px solid ' + edge + '; border-radius:4px; background-color:' +
-            rgba(color, f.important ? 0.30 : 0.17) + '; padding:' + (compact ? this._px(1) + 'px ' + this._px(4) + 'px' : this._px(4) + 'px ' + this._px(6) + 'px') + ';' +
-            (f.important ? ' border-top:1px solid ' + rgba(t.imp, 0.6) + '; border-bottom:1px solid ' + rgba(t.imp, 0.6) + ';' : '');
-        if (done && (ds === 'dim' || ds === 'both')) box.opacity = 120;
+        const todo = !!e.todo, done = todo && e.done;
+        const btn = new St.Button({ reactive: true, can_focus: false, x_expand: true });
+        fillActor(btn);
+        const edge = e.important ? t.imp : color;
+        btn.style = 'border-left:' + this._px(3) + 'px solid ' + edge + '; border-radius:4px; background-color:' +
+            rgba(color, e.important ? 0.30 : 0.17) + '; padding:' + (compact ? this._px(1) + 'px ' + this._px(4) + 'px' : this._px(4) + 'px ' + this._px(6) + 'px') + ';' +
+            (e.important ? ' border-top:1px solid ' + rgba(t.imp, 0.6) + '; border-bottom:1px solid ' + rgba(t.imp, 0.6) + ';' : '');
+        if (this._drag && this._drag.id === e.id) btn.opacity = 110;
+        else if (done && (ds === 'dim' || ds === 'both')) btn.opacity = 120;
 
         const row = new St.BoxLayout({ style: 'spacing:4px;' });
+
+        // drag grip: pressing it starts a drag (the press is consumed so the entry is not clicked / the desklet not dragged)
+        const grip = new St.Bin({ reactive: true, track_hover: true, can_focus: false, y_align: Clutter.ActorAlign.CENTER });
+        grip.set_child(new St.Label({ text: '≡', style: 'padding:0 2px; opacity:150; color:' + t.text + ';' }));
+        grip.connect('button-press-event', function (actor, event) {
+            if (event.get_button() !== 1) return false;
+            this._startDrag(e.id);
+            return true;
+        }.bind(this));
+        row.add_actor(grip);
+
         if (todo && this.cfg_showCheckbox !== false) {
             const chk = new St.Button({ label: done ? '☑' : '☐', reactive: true, can_focus: false });
             chk.style = 'padding:0 2px; color:' + t.text + ';';
             chk.connect('clicked', function () {
-                Model.toggleDone(this.data, o);
+                Model.toggleDone(e);
                 this._changed();
             }.bind(this));
             row.add_actor(chk);
@@ -922,37 +910,167 @@ PlannerDesklet.prototype = {
         const col = new St.BoxLayout({ vertical: true, x_expand: true });
         const strike = done && (ds === 'strike' || ds === 'both');
         const title = new St.Label({
-            text: (f.important && this.cfg_showStar !== false ? '★ ' : '') + trunc(f.title, compact ? 60 : 120),
-            style: (f.important ? 'font-weight:bold; ' : '') + (strike ? 'text-decoration:line-through; ' : '')
+            text: (e.important && this.cfg_showStar !== false ? '★ ' : '') + trunc(e.title, compact ? 60 : 120),
+            style: (e.important ? 'font-weight:bold; ' : '') + (strike ? 'text-decoration:line-through; ' : '')
         });
         const ct = title.clutter_text;
         if (compact) { ct.set_line_wrap(false); ct.set_ellipsize(Pango.EllipsizeMode.END); }
         else { ct.set_line_wrap(true); ct.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR); ct.set_ellipsize(Pango.EllipsizeMode.NONE); }
         col.add_actor(title);
 
-        const small = 'font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:200;';
-        const meta = [];
-        if (f.due && this.cfg_showDue !== false) { const d = parseIso(f.due); if (d) meta.push(this._L().dueLabel(d.getDate(), this._L().monthsS[d.getMonth()])); }
-        if (meta.length) {
-            const ml = new St.Label({ text: meta.join(' · '), style: small });
-            ml.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
-            col.add_actor(ml);
-        }
-        if (!compact && f.notes && this.cfg_showNotes !== false) {
-            const first = trunc(f.notes.split('\n')[0], 70);
-            const nl = new St.Label({ text: first, style: small });
+        if (!compact && e.notes && this.cfg_showNotes !== false) {
+            const first = trunc(e.notes.split('\n')[0], 70);
+            const nl = new St.Label({ text: first, style: 'font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:200;' });
             nl.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
             col.add_actor(nl);
         }
         row.add_actor(col);
-        box.set_child(row);
-        return box;
+        btn.set_child(row);
+        btn.connect('clicked', function () { this._openEditor(e, date); }.bind(this));
+        rec.items.push({ id: e.id, actor: btn });
+        return btn;
+    },
+
+    /* ---------------- drag to reorder ---------------- */
+
+    _startDrag: function (id) {
+        if (this._drag) return;
+        this._drag = { id: id };
+        // Follow the real pointer position / button state on a timer (works even when the pointer leaves the desklet).
+        this._dragTimer = Mainloop.timeout_add(30, this._dragTick.bind(this));
+        this._render(); // dims the dragged entry
+    },
+
+    _dragTick: function () {
+        if (!this._drag) { this._dragTimer = null; return false; }
+        try {
+            const p = global.get_pointer(); // [x, y, modifiers]
+            if (!(p[2] & Clutter.ModifierType.BUTTON1_MASK)) { this._dragTimer = null; this._endDrag(); return false; }
+            this._dragTo(p[0], p[1]);
+        } catch (e) { global.logError('[weekly-planner] drag error: ' + e); }
+        return true;
+    },
+
+    /* Moves the dragged entry to the day / position under the pointer (live). */
+    _dragTo: function (px, py) {
+        const id = this._drag.id;
+        let rec = null;
+        for (let k = 0; k < this._layout.length && !rec; k++) {
+            const r = this._layout[k];
+            const pos = r.box.get_transformed_position(), size = r.box.get_transformed_size();
+            if (px >= pos[0] && px <= pos[0] + size[0] && py >= pos[1] && py <= pos[1] + size[1]) rec = r;
+        }
+        if (!rec) return;
+        let idx = 0;
+        rec.items.forEach(function (it) {
+            if (it.id === id) return;
+            const pos = it.actor.get_transformed_position(), size = it.actor.get_transformed_size();
+            if (pos[1] + size[1] / 2 < py) idx++;
+        });
+        if (Model.move(this.data, id, rec.date, idx)) {
+            this.data.ui.selected = rec.date;
+            this._scheduleSave();
+            this._render();
+        }
+    },
+
+    _endDrag: function () {
+        if (this._dragTimer) { Mainloop.source_remove(this._dragTimer); this._dragTimer = null; }
+        const was = !!this._drag;
+        this._drag = null;
+        if (was) this._changed();
+    },
+
+    /* ---------------- dialogs ---------------- */
+
+    _later: function (fn) {
+        // short delay so a new ModalDialog isn't opened while another one is closing
+        Mainloop.timeout_add(220, function () { try { fn(); } catch (e) { global.logError('[weekly-planner] ' + e); } return false; });
+    },
+
+    _newDialog: function (title) {
+        const dlg = new ModalDialog.ModalDialog({ styleClass: 'wp-dialog' });
+        dlg.contentLayout.add_actor(new St.Label({ text: title, style: 'font-weight:bold; font-size:15px; padding-bottom:4px;' }));
+        return dlg;
+    },
+
+    /* Click handler wrapper: a failure is logged instead of silently doing nothing. */
+    _openEditor: function (e, dateStr) {
+        try { this._openEditorImpl(e, dateStr); } catch (err) {
+            global.logError('[weekly-planner] could not open the editor: ' + err + '\n' + (err && err.stack ? err.stack : ''));
+        }
+    },
+
+    /* e = entry (edit) or null (new entry at the bottom of dateStr) */
+    _openEditorImpl: function (e, dateStr) {
+        const self = this;
+        const st = { color: e ? e.color : '', important: e ? !!e.important : false, todo: e ? !!e.todo : false };
+        const heading = (e ? this._t('editEntry') : this._t('newEntry')) + ' — ' + longDate(parseIso(dateStr), this.cfg_language);
+        const dlg = this._newDialog(heading);
+        const L = dlg.contentLayout;
+
+        const titleE = mkEntry(e ? e.title : '', this._t('hintTitle'));
+        L.add_actor(field(this._t('fTitle'), titleE));
+
+        const notesE = mkEntry(e ? e.notes : '', this._t('hintNotes'));
+        notesE.clutter_text.set_single_line_mode(false);
+        notesE.clutter_text.set_activatable(false);
+        notesE.clutter_text.set_line_wrap(true);
+        notesE.style = 'min-width:280px; min-height:48px;';
+        L.add_actor(field(this._t('fNotes'), notesE));
+
+        // color picker: "default" chip + palette swatches
+        const colOpts = [{ label: this._t('colorDefault'), value: '' }].concat(PALETTE.map(function (c) {
+            return { label: '', value: c, color: c, swatch: true };
+        }));
+        L.add_actor(field(this._t('fColor'), chipRow(colOpts, function () { return st.color; }, function (v) { st.color = v; }, 9)));
+
+        const opts = new St.BoxLayout({ style: 'spacing:6px;' });
+        opts.add_actor(toggleChip(this._t('toDo'), function () { return st.todo; }, function (v) { st.todo = v; }, null));
+        opts.add_actor(toggleChip(this._t('important'), function () { return st.important; }, function (v) { st.important = v; }, this._theme.imp));
+        L.add_actor(field(this._t('fOptions'), opts));
+
+        const errL = new St.Label({ text: '', style: 'color:#ff7b72; padding-top:6px;' });
+        L.add_actor(errL);
+
+        const onSave = function () {
+            const title = titleE.get_text().trim();
+            if (!title) { errL.set_text(self._t('errTitle')); return; }
+            const fields = { title: title, notes: notesE.get_text().trim(), color: st.color, important: st.important, todo: st.todo };
+            dlg.close();
+            if (e) Model.update(self.data, e, fields); else Model.add(self.data, dateStr, fields);
+            self.data.ui.selected = dateStr;
+            self._changed();
+        };
+
+        const buttons = [];
+        if (e) buttons.push({ label: this._t('del'), action: function () { dlg.close(); self._later(function () { self._confirmDelete(e); }); } });
+        buttons.push({ label: this._t('cancel'), action: function () { dlg.close(); }, key: Clutter.KEY_Escape });
+        buttons.push({ label: this._t('save'), action: onSave });
+        dlg.setButtons(buttons);
+        dlg.open();
+        try { dlg.setInitialKeyFocus(titleE); } catch (err) { /* not available in older versions */ }
+    },
+
+    _confirmDelete: function (e) {
+        const self = this;
+        const dlg = this._newDialog(this._t('delEntry'));
+        const lbl = new St.Label({ text: this._t('confirmDel')(trunc(e.title, 50)), style: 'padding:6px 0; max-width:360px;' });
+        lbl.clutter_text.set_line_wrap(true);
+        dlg.contentLayout.add_actor(lbl);
+        dlg.setButtons([
+            { label: this._t('del'), action: function () { dlg.close(); Model.remove(self.data, e.id); self._changed(); } },
+            { label: this._t('cancel'), action: function () { dlg.close(); }, key: Clutter.KEY_Escape }
+        ]);
+        dlg.open();
     },
 
     /* ---------------- lifecycle ---------------- */
 
     on_desklet_removed: function () {
         this._endResize(false);
+        this._drag = null;
+        if (this._dragTimer) { Mainloop.source_remove(this._dragTimer); this._dragTimer = null; }
         if (this._dayTimer) { Mainloop.source_remove(this._dayTimer); this._dayTimer = null; }
         if (this._cfgIdle) { Mainloop.source_remove(this._cfgIdle); this._cfgIdle = null; }
         if (this._saveTimer) { Mainloop.source_remove(this._saveTimer); this._saveTimer = null; }
