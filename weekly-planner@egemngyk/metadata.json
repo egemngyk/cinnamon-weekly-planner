@@ -1,0 +1,8 @@
+{
+    "uuid": "weekly-planner@egemngyk",
+    "name": "Haftalık Planlayıcı",
+    "description": "Haftalık tekrarlı ve tarihe bağlı kayıtları, görevleri ve sınavları gösteren; her örneği bağımsız çalışan planlayıcı.",
+    "version": "1.0.0",
+    "max-instances": "-1",
+    "website": "https://github.com/egemngyk"
+}

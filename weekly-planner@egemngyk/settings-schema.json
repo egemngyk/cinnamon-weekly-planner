@@ -1,0 +1,179 @@
+{
+    "layout": {
+        "type": "layout",
+        "pages": ["page-general", "page-colors", "page-style"],
+        "page-general": {
+            "type": "page",
+            "title": "Genel",
+            "sections": ["sec-view", "sec-size"]
+        },
+        "page-colors": {
+            "type": "page",
+            "title": "Renkler",
+            "sections": ["sec-colors"]
+        },
+        "page-style": {
+            "type": "page",
+            "title": "Biçim",
+            "sections": ["sec-look", "sec-format"]
+        },
+        "sec-view": {
+            "type": "section",
+            "title": "Görünüm",
+            "keys": ["layoutMode", "compact", "highlightToday", "doneStyle"]
+        },
+        "sec-size": {
+            "type": "section",
+            "title": "Boyut",
+            "keys": ["width", "height", "fontSize"]
+        },
+        "sec-colors": {
+            "type": "section",
+            "title": "Renkler",
+            "keys": ["bgColor", "textColor", "accentColor", "dayHeaderColor", "borderColor", "importantColor"]
+        },
+        "sec-look": {
+            "type": "section",
+            "title": "Çerçeve ve saydamlık",
+            "keys": ["opacity", "borderWidth", "borderRadius"]
+        },
+        "sec-format": {
+            "type": "section",
+            "title": "Başlık biçimleri",
+            "keys": ["dateFormat", "headerStyle"]
+        }
+    },
+    "layoutMode": {
+        "type": "combobox",
+        "default": "columns",
+        "description": "Yerleşim",
+        "options": {
+            "Dikey sütun (7 sütun)": "columns",
+            "Yatay satır (7 satır)": "rows"
+        }
+    },
+    "compact": {
+        "type": "switch",
+        "default": false,
+        "description": "Kompakt görünüm"
+    },
+    "highlightToday": {
+        "type": "switch",
+        "default": true,
+        "description": "Bugünü vurgula"
+    },
+    "doneStyle": {
+        "type": "combobox",
+        "default": "both",
+        "description": "Tamamlanan görevlerin görünümü",
+        "options": {
+            "Üstü çizili": "strike",
+            "Soluk": "dim",
+            "Üstü çizili ve soluk": "both"
+        }
+    },
+    "width": {
+        "type": "spinbutton",
+        "default": 620,
+        "min": 240,
+        "max": 2400,
+        "step": 10,
+        "units": "px",
+        "description": "Genişlik"
+    },
+    "height": {
+        "type": "spinbutton",
+        "default": 420,
+        "min": 160,
+        "max": 1600,
+        "step": 10,
+        "units": "px",
+        "description": "Yükseklik"
+    },
+    "fontSize": {
+        "type": "spinbutton",
+        "default": 12,
+        "min": 8,
+        "max": 28,
+        "step": 1,
+        "units": "px",
+        "description": "Yazı boyutu"
+    },
+    "bgColor": {
+        "type": "colorchooser",
+        "default": "rgb(28,30,36)",
+        "description": "Arka plan rengi"
+    },
+    "textColor": {
+        "type": "colorchooser",
+        "default": "rgb(236,238,242)",
+        "description": "Metin rengi"
+    },
+    "accentColor": {
+        "type": "colorchooser",
+        "default": "rgb(79,157,222)",
+        "description": "Vurgu rengi"
+    },
+    "dayHeaderColor": {
+        "type": "colorchooser",
+        "default": "rgb(170,180,200)",
+        "description": "Gün başlığı rengi"
+    },
+    "borderColor": {
+        "type": "colorchooser",
+        "default": "rgb(70,76,90)",
+        "description": "Kenarlık rengi"
+    },
+    "importantColor": {
+        "type": "colorchooser",
+        "default": "rgb(255,196,60)",
+        "description": "Önemli kayıt vurgusu"
+    },
+    "opacity": {
+        "type": "scale",
+        "default": 92,
+        "min": 10,
+        "max": 100,
+        "step": 1,
+        "description": "Arka plan opaklığı (%)"
+    },
+    "borderWidth": {
+        "type": "spinbutton",
+        "default": 1,
+        "min": 0,
+        "max": 8,
+        "step": 1,
+        "units": "px",
+        "description": "Kenarlık kalınlığı"
+    },
+    "borderRadius": {
+        "type": "spinbutton",
+        "default": 10,
+        "min": 0,
+        "max": 40,
+        "step": 1,
+        "units": "px",
+        "description": "Köşe yuvarlaklığı"
+    },
+    "dateFormat": {
+        "type": "combobox",
+        "default": "long",
+        "description": "Hafta aralığı biçimi",
+        "options": {
+            "2–8 Kasım 2026": "long",
+            "2–8 Kas 2026": "short",
+            "02.11.2026 – 08.11.2026": "numeric"
+        }
+    },
+    "headerStyle": {
+        "type": "combobox",
+        "default": "full",
+        "description": "Gün başlığı biçimi",
+        "options": {
+            "Gün adı + tarih (Pazartesi, 2 Kas)": "full",
+            "Kısa ad + gün no (Pzt 2)": "short",
+            "Yalnızca gün adı": "name",
+            "Yalnızca tarih (02.11)": "date"
+        }
+    }
+}

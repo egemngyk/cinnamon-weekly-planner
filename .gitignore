@@ -1,0 +1,3 @@
+*.corrupt-*
+*~
+.DS_Store
