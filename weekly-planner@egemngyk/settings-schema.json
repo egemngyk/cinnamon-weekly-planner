@@ -79,6 +79,7 @@
             "type": "section",
             "title": "Title formats",
             "keys": [
+                "deskletTitle",
                 "dateFormat",
                 "headerStyle"
             ]
@@ -1229,5 +1230,11 @@
         "step": 1,
         "description": "Max entries per day (0 = unlimited)",
         "tooltip": "Maximum number of entries allowed per day. Exceeding this limit is blocked with a warning dialog. Set to 0 for unlimited."
+    },
+    "deskletTitle": {
+        "type": "entry",
+        "default": "",
+        "description": "Desklet title",
+        "tooltip": "Custom name/title shown in the top bar. Leave empty to show the week dates only."
     }
 }

@@ -521,7 +521,7 @@ const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width
     'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language',
     'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6',
     'showNotes', 'showCheckbox', 'showStar',
-    'entryCols', 'entryRows', 'maxEntriesPerDay'];
+    'entryCols', 'entryRows', 'maxEntriesPerDay', 'deskletTitle'];
 
 /* Settings list widgets: [kind, weekday index, settings key].
  * 'weekly' = repeat every week (data.weekly[i]), 'week' = specific week being edited (data.days[date]). */
@@ -764,7 +764,8 @@ PlannerDesklet.prototype = {
             '; border-radius:' + this.cfg_borderRadius + 'px; padding:' + this._px(8) + 'px; color:' + t.text + '; font-size:' + t.fs + 'px;';
         const navStyle = 'color:' + t.text + '; padding:' + this._px(2) + 'px ' + this._px(8) + 'px; border-radius:' + this._px(6) + 'px; font-size:' + Math.round(t.fs * 1.25) + 'px;';
         [this._btnPrev, this._btnNext, this._btnToday, this._btnAdd].forEach(function (b) { b.style = navStyle; });
-        this._title.style = 'font-weight:bold; color:' + t.text + '; font-size:' + Math.round(t.fs * 1.1) + 'px;';
+        this._title.style = 'font-weight:bold; color:' + t.text + '; font-size:' + Math.round(t.fs * 1.15) + 'px;';
+        if (this._subTitle) this._subTitle.style = 'color:' + t.text + '; font-size:' + Math.round(t.fs * 0.82) + 'px;';
         this._head.style = 'spacing:' + this._px(4) + 'px; padding-bottom:' + this._px(6) + 'px;';
         (this._handleList || []).forEach(function (h) { h(false); });
         this._btnToday.set_label(this._t('today'));
@@ -824,9 +825,15 @@ PlannerDesklet.prototype = {
         this._btnNext = mk('›', function () { this._shiftWeek(1); }.bind(this));
         this._btnToday = mk('Today', function () { this._gotoWeek(0); }.bind(this));
         this._btnAdd = mk('＋', function () { this._openEditor(null, this._targetDate()); }.bind(this));
-        this._title = new St.Label({ text: '', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        this._titleBox = new St.BoxLayout({ vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        this._title = new St.Label({ text: '', style_class: 'wp-top-title', x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER });
+        this._subTitle = new St.Label({ text: '', style_class: 'wp-top-sub', x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER });
+        this._title.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
+        this._subTitle.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
+        this._titleBox.add_actor(this._title);
+        this._titleBox.add_actor(this._subTitle);
         head.add_actor(this._btnPrev);
-        head.add_actor(this._title);
+        head.add_actor(this._titleBox);
         head.add_actor(this._btnNext);
         head.add_actor(this._btnToday);
         head.add_actor(this._btnAdd);
@@ -987,7 +994,17 @@ PlannerDesklet.prototype = {
         try {
             this._todayStr = iso(today());
             const start = this._weekStart();
-            this._title.set_text(formatRange(start, this.cfg_dateFormat, this.cfg_language));
+            const range = formatRange(start, this.cfg_dateFormat, this.cfg_language);
+            const name = String(this.cfg_deskletTitle || '').trim();
+            if (name) {
+                this._title.set_text(name);
+                this._subTitle.set_text(range);
+                this._subTitle.show();
+            } else {
+                this._title.set_text(range);
+                this._subTitle.set_text('');
+                this._subTitle.hide();
+            }
             const week = Model.week(this.data, start);
             this._layout = [];
             this._body.destroy_all_children();

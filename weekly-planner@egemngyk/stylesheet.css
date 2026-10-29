@@ -68,3 +68,11 @@
     font-size: 0.82em;
     opacity: 0.75;
 }
+
+.wp-top-title {
+    font-weight: bold;
+}
+.wp-top-sub {
+    font-size: 0.82em;
+    opacity: 0.8;
+}
