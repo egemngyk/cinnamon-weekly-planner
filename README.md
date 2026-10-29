@@ -21,6 +21,9 @@ Add the desklet as many times as you like; each one starts empty and independent
 - **Resizing:** drag the right edge (`⋮`), the bottom edge (`⋯`) or the bottom-right corner (`◢`) with the mouse.
   The right-click menu also has *Width ±60*, *Height ±60* and *Go to this week*.
 - **Scale:** Configure → Size → *UI scale* (75%–200%) scales fonts, spacing and buttons together.
+- **Hiding days:** Configure → *Visible days* lets you hide any weekdays completely (for example Saturday and Sunday).
+  Hidden days are not drawn at all and the remaining columns/rows use the freed space; their entries are kept and
+  show up again when you re-enable the day. If every day is hidden, a hint is shown instead.
 - **Responsive columns:** the seven columns shrink with the desklet width; below a minimum column width
   they stop shrinking and horizontal scrolling takes over.
 

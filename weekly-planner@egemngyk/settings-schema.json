@@ -42,6 +42,45 @@
             "Strikethrough and dimmed": "both"
         }
     },
+    "headerDays": {
+        "type": "header",
+        "description": "Visible days"
+    },
+    "showDay0": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Monday"
+    },
+    "showDay1": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Tuesday"
+    },
+    "showDay2": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Wednesday"
+    },
+    "showDay3": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Thursday"
+    },
+    "showDay4": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Friday"
+    },
+    "showDay5": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Saturday"
+    },
+    "showDay6": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Sunday"
+    },
     "header1": {
         "type": "header",
         "description": "Size"

@@ -42,6 +42,7 @@ const I18N = {
         menuWPlus: 'Width +60', menuWMinus: 'Width −60', menuHPlus: 'Height +60', menuHMinus: 'Height −60',
         menuGoto: 'Go to this week',
         renderErr: 'Display error (see the log).',
+        allHidden: 'All days are hidden.\nEnable some in Configure → Visible days.',
         cancel: 'Cancel', save: 'Save', del: 'Delete',
         newEntry: 'New entry', editEntry: 'Edit entry',
         fTitle: 'Title', fNotes: 'Notes', fColor: 'Color', fDate: 'Date', fRepeat: 'Repeat',
@@ -72,6 +73,7 @@ const I18N = {
         menuWPlus: 'Genişlik +60', menuWMinus: 'Genişlik −60', menuHPlus: 'Yükseklik +60', menuHMinus: 'Yükseklik −60',
         menuGoto: 'Bu haftaya git',
         renderErr: 'Görüntüleme hatası (günlüğe bakın).',
+        allHidden: 'Tüm günler gizli.\nYapılandır → Visible days bölümünden açın.',
         cancel: 'İptal', save: 'Kaydet', del: 'Sil',
         newEntry: 'Yeni kayıt', editEntry: 'Kaydı düzenle',
         fTitle: 'Başlık', fNotes: 'Not', fColor: 'Renk', fDate: 'Tarih', fRepeat: 'Tekrar',
@@ -423,7 +425,8 @@ function mkEntry(text, hint, width) {
 
 const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width', 'height', 'fontSize',
     'bgColor', 'textColor', 'accentColor', 'dayHeaderColor', 'borderColor', 'importantColor',
-    'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language'];
+    'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language',
+    'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6'];
 
 function PlannerDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
@@ -731,10 +734,19 @@ PlannerDesklet.prototype = {
     _weekStart: function () { return addDays(mondayOf(today()), 7 * this.data.ui.weekOffset); },
     _shiftWeek: function (n) { this.data.ui.weekOffset += n; this._changed(); },
     _gotoWeek: function (off) { this.data.ui.weekOffset = off; this._changed(); },
+    /* Indices (0 = Monday) of the days that are not hidden in the settings. */
+    _visibleDays: function () {
+        const r = [];
+        for (let i = 0; i < 7; i++) if (this['cfg_showDay' + i] !== false) r.push(i);
+        return r;
+    },
     _defaultNewDate: function () {
         const s = this._weekStart(), t = today();
+        const vis = this._visibleDays();
         const diff = Math.round((t.getTime() - s.getTime()) / 86400000);
-        return iso(diff >= 0 && diff < 7 ? t : s);
+        let i = diff >= 0 && diff < 7 ? diff : 0;
+        if (vis.length && vis.indexOf(i) < 0) i = vis[0]; // today is hidden: use the first visible day
+        return iso(addDays(s, i));
     },
 
     /* ---------------- rendering ---------------- */
@@ -789,10 +801,13 @@ PlannerDesklet.prototype = {
         const pad2 = this._px(16) + 2 * this.cfg_borderWidth + this._px(12) + this._px(22);
         const gap = this._px(4);
         // Columns shrink with the width; below 70 px they stop shrinking and horizontal scrolling (overflow) kicks in.
-        const colW = Math.max(this._px(70), Math.floor((this.cfg_width - pad2 - 6 * gap) / 7));
+        const vis = this._visibleDays();
+        if (!vis.length) { this._body.add_actor(new St.Label({ text: this._t('allHidden') })); return; }
+        const colW = Math.max(this._px(70), Math.floor((this.cfg_width - pad2 - (vis.length - 1) * gap) / vis.length));
         const cols = new St.BoxLayout({ style: 'spacing:' + gap + 'px;' });
         const todayStr = this._todayStr;
-        for (let i = 0; i < 7; i++) {
+        for (let k = 0; k < vis.length; k++) {
+            const i = vis[k];
             const date = occ.dates[i];
             const btn = this._dayButton(date, date === todayStr);
             btn.set_width(colW);
@@ -806,9 +821,12 @@ PlannerDesklet.prototype = {
     },
 
     _renderRows: function (occ) {
+        const vis = this._visibleDays();
+        if (!vis.length) { this._body.add_actor(new St.Label({ text: this._t('allHidden') })); return; }
         const rows = new St.BoxLayout({ vertical: true, style: 'spacing:4px;' });
         const todayStr = this._todayStr;
-        for (let i = 0; i < 7; i++) {
+        for (let k = 0; k < vis.length; k++) {
+            const i = vis[k];
             const date = occ.dates[i];
             const btn = this._dayButton(date, date === todayStr);
             const row = new St.BoxLayout({ style: 'spacing:8px;' });
