@@ -14,9 +14,9 @@ const titles = (data, mon) => Model.occurrences(data, wk(mon)).days.map(l => l.m
 let d = Model.defaults();
 // 2 Kasım 2026 = Pazartesi
 assert.strictEqual(parseIso('2026-11-02').getDay(), 1);
-Model.create(d, {title:'Matematik',notes:'',categoryId:null,color:null,important:false,startTime:'09:00',endTime:'',due:''}, '2026-11-02', true);
-Model.create(d, {title:'Tarih sınavı',notes:'',categoryId:null,color:null,important:true,startTime:'',endTime:'',due:''}, '2026-11-04', false);
-Model.create(d, {title:'Ödev teslim',notes:'',categoryId:null,color:null,important:false,startTime:'',endTime:'',due:''}, '2026-11-10', false);
+Model.create(d, {title:'Matematik',notes:'',color:null,important:false,due:''}, '2026-11-02', true);
+Model.create(d, {title:'Tarih sınavı',notes:'',color:null,important:true,due:''}, '2026-11-04', false);
+Model.create(d, {title:'Ödev teslim',notes:'',color:null,important:false,due:''}, '2026-11-10', false);
 
 assert.deepStrictEqual(titles(d,'2026-11-02'), ['Matematik','','Tarih sınavı','','','','']);
 assert.deepStrictEqual(titles(d,'2026-11-09'), ['Matematik','Ödev teslim','','','','','']);
@@ -49,7 +49,7 @@ assert.strictEqual(titles(d,'2026-11-23')[0], 'Matematik');
 
 // 'future' bölme: 23 Kasım'dan itibaren saat ve başlık değişsin
 o = Model.occurrences(d, wk('2026-11-23')).days[0][0];
-Model.edit(d, o, Object.assign({}, o.f, {title:'Matematik II', startTime:'10:00'}), '2026-11-23', true, 'future');
+Model.edit(d, o, Object.assign({}, o.f, {title:'Matematik II', notes:'yeni not'}), '2026-11-23', true, 'future');
 assert.strictEqual(titles(d,'2026-11-09')[0], 'Matematik (ek ders)');
 assert.strictEqual(titles(d,'2026-11-02')[0], 'Matematik');
 assert.strictEqual(titles(d,'2026-11-23')[0], 'Matematik II');

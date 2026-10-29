@@ -2,6 +2,7 @@
 # Haftalık Planlayıcı desklet kurulum betiği
 #   ./install.sh              kur / güncelle
 #   ./install.sh --uninstall  kaldır (veri dosyalarına dokunmaz)
+#   ./install.sh --reset-settings  kur + eski ayar dosyalarını temizle
 set -euo pipefail
 
 UUID="weekly-planner@egemngyk"
@@ -16,6 +17,12 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     exit 0
 fi
 
+if [[ "${1:-}" == "--reset-settings" ]]; then
+    # Eski/bozuk denemelerden kalan ayar dosyalarını temizler (kayıt verilerine dokunmaz).
+    rm -rf "${XDG_CONFIG_HOME:-$HOME/.config}/cinnamon/spices/$UUID"
+    echo "Eski ayar dosyaları temizlendi. Masaüstündeki eski örneği kaldırıp yeniden ekleyin."
+fi
+
 command -v cinnamon >/dev/null 2>&1 && echo "Cinnamon sürümü: $(cinnamon --version 2>/dev/null || echo bilinmiyor)"
 [[ -f "$SRC/metadata.json" ]] || { echo "Hata: $SRC/metadata.json bulunamadı" >&2; exit 1; }
 
@@ -24,7 +31,3 @@ rm -rf "$DEST"
 cp -r "$SRC" "$DEST"
 echo "Kuruldu: $DEST"
 echo
-echo "Sonraki adımlar:"
-echo "  1) Sistem Ayarları > Masaüstü Bileşenleri (Desklets) > 'Haftalık Planlayıcı' > + ile masaüstüne ekleyin."
-echo "  2) Aynı bileşeni istediğiniz kadar tekrar ekleyebilirsiniz; her örnek bağımsızdır."
-echo "  3) Güncelleme sonrası görünmüyorsa: Alt+F2, 'r' yazıp Enter (Cinnamon'ı yeniden başlatır)."

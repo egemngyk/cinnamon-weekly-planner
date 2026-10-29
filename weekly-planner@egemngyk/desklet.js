@@ -336,6 +336,11 @@ function field(title, widget) {
     return b;
 }
 
+/* x_fill/y_fill bazı Cinnamon sürümlerinde yok; kurucuda verilirse yükleme çöker, burada sessizce denenir. */
+function fillActor(a) {
+    try { a.x_fill = true; a.y_fill = true; } catch (e) { /* yut */ }
+}
+
 function mkEntry(text, hint, width) {
     return new St.Entry({ text: text || '', hint_text: hint || '', can_focus: true, style: 'min-width:' + (width || 280) + 'px;' });
 }
@@ -346,7 +351,7 @@ function mkEntry(text, hint, width) {
 
 const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width', 'height', 'fontSize',
     'bgColor', 'textColor', 'accentColor', 'dayHeaderColor', 'borderColor', 'importantColor',
-    'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle'];
+    'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale'];
 
 function PlannerDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
@@ -362,7 +367,23 @@ PlannerDesklet.prototype = {
         this._cfgIdle = null;
         this._dayTimer = null;
         this._dialog = null;
+        this._rs = null;
+        this._rsId = null;
+        this._rsTimer = null;
+        this._rsGrab = false;
+        try {
+            this._setup(metadata, desklet_id);
+        } catch (e) {
+            // Yükleme hatası "!" olarak kalmasın: nedeni günlüğe yaz, masaüstünde göster.
+            global.logError('[weekly-planner] başlatma hatası: ' + e + '\n' + (e && e.stack ? e.stack : ''));
+            try {
+                this.setContent(new St.Label({ text: 'Haftalık Planlayıcı başlatılamadı:\n' + e,
+                    style: 'color:#ff7b72; padding:8px; background-color:rgba(0,0,0,0.6);' }));
+            } catch (e2) { /* yut */ }
+        }
+    },
 
+    _setup: function (metadata, desklet_id) {
         this.settings = new Settings.DeskletSettings(this, metadata.uuid, desklet_id);
         CFG_KEYS.forEach(function (k) {
             this.settings.bindProperty(Settings.BindingDirection.IN, k, 'cfg_' + k, this._onCfgChanged.bind(this));
@@ -445,14 +466,23 @@ PlannerDesklet.prototype = {
             accent: this.cfg_accentColor,
             border: rgba(this.cfg_borderColor, a),
             imp: this.cfg_importantColor,
-            fs: this.cfg_fontSize
+            k: Math.max(0.5, Math.min(3, (+this.cfg_uiScale || 100) / 100))
         };
+        t.fs = Math.round(this.cfg_fontSize * t.k * 10) / 10; // ölçekli yazı boyutu
         this._root.set_size(this.cfg_width, this.cfg_height);
         this._root.style = 'background-color:' + t.bg + '; border:' + this.cfg_borderWidth + 'px solid ' + t.border +
-            '; border-radius:' + this.cfg_borderRadius + 'px; padding:8px; color:' + t.text + '; font-size:' + t.fs + 'px;';
-        const navStyle = 'color:' + t.text + '; padding:2px 8px; border-radius:6px; font-size:' + Math.round(t.fs * 1.25) + 'px;';
+            '; border-radius:' + this.cfg_borderRadius + 'px; padding:' + this._px(8) + 'px; color:' + t.text + '; font-size:' + t.fs + 'px;';
+        const navStyle = 'color:' + t.text + '; padding:' + this._px(2) + 'px ' + this._px(8) + 'px; border-radius:' + this._px(6) + 'px; font-size:' + Math.round(t.fs * 1.25) + 'px;';
         [this._btnPrev, this._btnNext, this._btnToday, this._btnAdd].forEach(function (b) { b.style = navStyle; });
         this._title.style = 'font-weight:bold; color:' + t.text + '; font-size:' + Math.round(t.fs * 1.1) + 'px;';
+        this._head.style = 'spacing:' + this._px(4) + 'px; padding-bottom:' + this._px(6) + 'px;';
+        (this._handleList || []).forEach(function (h) { h(false); });
+    },
+
+    /* Arayüz ölçeği (%): sabit piksel değerlerini ölçekler. */
+    _px: function (n) {
+        const k = Math.max(0.5, Math.min(3, (+this.cfg_uiScale || 100) / 100));
+        return Math.max(1, Math.round(n * k));
     },
 
     _setupMenu: function () {
@@ -484,7 +514,7 @@ PlannerDesklet.prototype = {
 
     _buildUi: function () {
         this._root = new St.BoxLayout({ vertical: true });
-        const head = new St.BoxLayout({ style: 'spacing:4px; padding-bottom:6px;' });
+        const head = this._head = new St.BoxLayout({ style: 'spacing:4px; padding-bottom:6px;' });
         const mk = function (label, cb) {
             const b = new St.Button({ label: label, reactive: true, can_focus: false, style_class: 'wp-nav' });
             b.connect('clicked', cb);
@@ -502,21 +532,116 @@ PlannerDesklet.prototype = {
         head.add_actor(this._btnAdd);
         this._root.add_actor(head);
 
+        // orta bölüm: kaydırma alanı + sağ kenar tutamacı
+        const mid = new St.BoxLayout({ x_expand: true, y_expand: true });
         this._scroll = new St.ScrollView({ x_expand: true, y_expand: true });
         this._scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC);
         this._body = new St.BoxLayout({ vertical: true });
         this._scroll.add_actor(this._body);
-        this._root.add_actor(this._scroll);
+        mid.add_actor(this._scroll);
+        mid.add_actor(this._makeHandle('r'));
+        this._root.add_actor(mid);
+
+        // alt bölüm: alt kenar tutamacı + sağ alt köşe tutamacı
+        const bottom = new St.BoxLayout({ x_expand: true });
+        const hb = this._makeHandle('b');
+        hb.x_expand = true;
+        bottom.add_actor(hb);
+        bottom.add_actor(this._makeHandle('c'));
+        this._root.add_actor(bottom);
+
         this.setContent(this._root);
     },
 
-    _weekStart: function () { return addDays(mondayOf(today()), 7 * this.data.ui.weekOffset); },
-    _shiftWeek: function (n) { this.data.ui.weekOffset += n; this._changed(); },
-    _gotoWeek: function (off) { this.data.ui.weekOffset = off; this._changed(); },
-    _defaultNewDate: function () {
-        const s = this._weekStart(), t = today();
-        const diff = Math.round((t.getTime() - s.getTime()) / 86400000);
-        return iso(diff >= 0 && diff < 7 ? t : s);
+    /* ---------------- fareyle yeniden boyutlandırma ---------------- */
+
+    /* kind: 'r' sağ kenar (genişlik), 'b' alt kenar (yükseklik), 'c' sağ alt köşe (ikisi) */
+    _makeHandle: function (kind) {
+        const glyph = kind === 'r' ? '⋮' : (kind === 'b' ? '⋯' : '◢');
+        const idle = kind === 'c' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)';
+        const hover = 'rgba(255,255,255,0.5)';
+        const h = new St.Bin({ reactive: true, track_hover: true, can_focus: false });
+        const lbl = new St.Label({ text: glyph, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER });
+        const self = this;
+        const paint = function (on) {
+            const q = self._px.bind(self);
+            const size = kind === 'r' ? 'width:' + q(10) + 'px; margin-left:' + q(2) + 'px;' :
+                kind === 'b' ? 'height:' + q(10) + 'px; margin-top:' + q(2) + 'px;' :
+                    'width:' + q(16) + 'px; height:' + q(10) + 'px; margin-top:' + q(2) + 'px;';
+            h.style = size + ' border-radius:3px; background-color:' + (on ? 'rgba(255,255,255,0.12)' : 'transparent') + ';';
+            lbl.style = 'font-size:' + q(8) + 'px; padding:0; color:' + (on ? hover : idle) + ';';
+        };
+        (this._handleList = this._handleList || []).push(paint);
+        paint(false);
+        h.set_child(lbl);
+        h.connect('notify::hover', function () { if (!this._rs) paint(h.hover); }.bind(this));
+        h.connect('button-press-event', function (actor, event) {
+            if (event.get_button() !== 1) return false;
+            this._startResize(kind, event);
+            return true; // olayı tüket: desklet sürüklenmesin
+        }.bind(this));
+        return h;
+    },
+
+    _startResize: function (kind, event) {
+        if (this._rs) return;
+        const c = event.get_coords();
+        this._rs = { kind: kind, x: c[0], y: c[1], w: this.cfg_width, h: this.cfg_height };
+        // Fare deskletin dışına (başka pencerelerin üstüne) çıksa da olayları kaçırmamak için:
+        //  1) imleci yakala, 2) düğme bırakma olayını sahnede dinle,
+        //  3) asıl konum/düğme durumunu zamanlayıcıyla global.get_pointer()'dan oku.
+        try { Clutter.grab_pointer(this._root); this._rsGrab = true; } catch (e) { this._rsGrab = false; }
+        this._rsId = global.stage.connect('captured-event', this._onResizeEvent.bind(this));
+        this._rsTimer = Mainloop.timeout_add(30, this._resizeTick.bind(this));
+    },
+
+    _applyResizePointer: function (px, py) {
+        const rs = this._rs;
+        if (rs.kind === 'r' || rs.kind === 'c')
+            this.cfg_width = Math.max(240, Math.min(2400, Math.round(rs.w + px - rs.x)));
+        if (rs.kind === 'b' || rs.kind === 'c')
+            this.cfg_height = Math.max(160, Math.min(1600, Math.round(rs.h + py - rs.y)));
+        this._onCfgChanged();
+    },
+
+    _resizeTick: function () {
+        if (!this._rs) { this._rsTimer = null; return false; }
+        try {
+            const p = global.get_pointer(); // [x, y, modifiers]
+            if (!(p[2] & Clutter.ModifierType.BUTTON1_MASK)) { this._rsTimer = null; this._endResize(true); return false; }
+            this._applyResizePointer(p[0], p[1]);
+        } catch (e) { /* yut */ }
+        return true;
+    },
+
+    _onResizeEvent: function (actor, event) {
+        if (!this._rs) return false;
+        const type = event.type();
+        if (type === Clutter.EventType.MOTION) {
+            const c = event.get_coords();
+            this._applyResizePointer(c[0], c[1]);
+            return true;
+        }
+        if (type === Clutter.EventType.BUTTON_RELEASE) {
+            this._endResize(true);
+            return true;
+        }
+        return false;
+    },
+
+    _endResize: function (save) {
+        if (this._rsTimer) { Mainloop.source_remove(this._rsTimer); this._rsTimer = null; }
+        if (this._rsId) { try { global.stage.disconnect(this._rsId); } catch (e) { /* yut */ } this._rsId = null; }
+        if (this._rsGrab) { try { Clutter.ungrab_pointer(); } catch (e) { /* yut */ } this._rsGrab = false; }
+        const was = !!this._rs;
+        this._rs = null;
+        if (save && was) {
+            try {
+                this.settings.setValue('width', this.cfg_width);
+                this.settings.setValue('height', this.cfg_height);
+            } catch (e) { global.logError('[weekly-planner] boyut kaydedilemedi: ' + e); }
+            this._onCfgChanged();
+        }
     },
 
     /* ---------------- çizim ---------------- */
@@ -540,7 +665,8 @@ PlannerDesklet.prototype = {
 
     _dayButton: function (date, isToday) {
         const t = this._theme;
-        const btn = new St.Button({ style_class: 'wp-day', reactive: true, can_focus: false, x_fill: true, y_fill: true, y_expand: true });
+        const btn = new St.Button({ style_class: 'wp-day', reactive: true, can_focus: false, y_expand: true });
+        fillActor(btn);
         btn.style = isToday && this.cfg_highlightToday
             ? 'background-color:' + rgba(t.accent, 0.16) + '; border:1px solid ' + rgba(t.accent, 0.7) + ';'
             : 'border:1px solid ' + rgba(this.cfg_borderColor, 0.35) + ';';
@@ -566,9 +692,11 @@ PlannerDesklet.prototype = {
     },
 
     _renderCols: function (occ) {
-        const pad2 = 16 + 2 * this.cfg_borderWidth + 16; // iç dolgu + kaydırma çubuğu payı
-        const gap = 4;
-        const colW = Math.max(96, Math.floor((this.cfg_width - pad2 - 6 * gap) / 7));
+        // iç dolgu (16) + kenarlık + sağ tutamaç (12) + dikey kaydırma çubuğu payı (22)
+        const pad2 = this._px(16) + 2 * this.cfg_borderWidth + this._px(12) + this._px(22);
+        const gap = this._px(4);
+        // Sütunlar genişliğe göre daralır; 70 px altına inerse yatay kaydırma (overflow) devreye girer.
+        const colW = Math.max(this._px(70), Math.floor((this.cfg_width - pad2 - 6 * gap) / 7));
         const cols = new St.BoxLayout({ style: 'spacing:' + gap + 'px;' });
         const todayStr = this._todayStr;
         for (let i = 0; i < 7; i++) {
@@ -609,10 +737,11 @@ PlannerDesklet.prototype = {
         const t = this._theme, f = o.f, compact = !!this.cfg_compact;
         const color = this._colorOf(f);
         const ds = this.cfg_doneStyle;
-        const btn = new St.Button({ reactive: true, can_focus: false, x_fill: true, x_expand: true });
+        const btn = new St.Button({ reactive: true, can_focus: false, x_expand: true });
+        fillActor(btn);
         const edge = f.important ? t.imp : color;
-        btn.style = 'border-left:3px solid ' + edge + '; border-radius:4px; background-color:' +
-            rgba(color, f.important ? 0.30 : 0.17) + '; padding:' + (compact ? '1px 4px' : '4px 6px') + ';' +
+        btn.style = 'border-left:' + this._px(3) + 'px solid ' + edge + '; border-radius:4px; background-color:' +
+            rgba(color, f.important ? 0.30 : 0.17) + '; padding:' + (compact ? this._px(1) + 'px ' + this._px(4) + 'px' : this._px(4) + 'px ' + this._px(6) + 'px') + ';' +
             (f.important ? ' border-top:1px solid ' + rgba(t.imp, 0.6) + '; border-bottom:1px solid ' + rgba(t.imp, 0.6) + ';' : '');
         if (o.done && (ds === 'dim' || ds === 'both')) btn.opacity = 120;
 
@@ -811,6 +940,7 @@ PlannerDesklet.prototype = {
     /* ---------------- yaşam döngüsü ---------------- */
 
     on_desklet_removed: function () {
+        this._endResize(false);
         if (this._dayTimer) { Mainloop.source_remove(this._dayTimer); this._dayTimer = null; }
         if (this._cfgIdle) { Mainloop.source_remove(this._cfgIdle); this._cfgIdle = null; }
         if (this._saveTimer) { Mainloop.source_remove(this._saveTimer); this._saveTimer = null; }
