@@ -925,7 +925,3 @@ PlannerDesklet.prototype = {
 function main(metadata, desklet_id) {
     return new PlannerDesklet(metadata, desklet_id);
 }
-
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Model: Model, iso: iso, parseIso: parseIso, addDays: addDays, mondayOf: mondayOf, formatRange: formatRange, parseTime: parseTime, readable: readable };
-}

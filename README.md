@@ -32,7 +32,11 @@ Aynı bileşeni istediğiniz kadar ekleyin; her biri boş ve bağımsız başlar
 - "Bu ve sonraki haftalar" düzenlemesi seriyi böler; önceki haftalar eski haliyle kalır.
 
 ## Geliştirme / hata ayıklama
-- Model mantığı testi (Cinnamon gerektirmez): `node tests/model.test.js`
+- Model mantığı testi (Cinnamon gerektirmez): `node tests/model.test.js` (desklet.js dosyasına dokunmadan çalışır)
 - Kodu değiştirince: `./install.sh` → `Alt+F2` → `r`.
 - Günlük: `Alt+F2` → `lg` (Looking Glass → Logs), veya `journalctl -f | grep -i weekly-planner`, `~/.xsession-errors`.
 - Tek örnek verisini sıfırlamak: ilgili `<desklet_id>.json` dosyasını silin.
+
+## Lisans
+
+MIT — bkz. [LICENSE](LICENSE).

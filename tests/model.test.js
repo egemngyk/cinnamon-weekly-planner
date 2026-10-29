@@ -1,7 +1,12 @@
 global.imports = new Proxy({}, { get: function () { return new Proxy(function(){}, { get: function(){ return new Proxy(function(){}, {get:function(){return function(){}}}); } }); } });
 global.global = { logError: console.error };
 const assert = require('assert');
-const M = require('../weekly-planner@egemngyk/desklet.js');
+const fs = require('fs'), path = require('path');
+const src = fs.readFileSync(path.join(__dirname, '../weekly-planner@egemngyk/desklet.js'), 'utf8') +
+    '\nmodule.exports = { Model, iso, parseIso, addDays, mondayOf, formatRange, parseTime, readable };';
+const mod = { exports: {} };
+new Function('module', 'exports', src)(mod, mod.exports);
+const M = mod.exports;
 const { Model, parseIso, addDays, iso, formatRange } = M;
 const wk = d => parseIso(d); // pazartesi tarihleri
 const titles = (data, mon) => Model.occurrences(data, wk(mon)).days.map(l => l.map(o => o.f.title + (o.done ? '✓' : '')).join(','));
