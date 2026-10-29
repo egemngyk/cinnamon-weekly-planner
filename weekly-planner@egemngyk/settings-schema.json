@@ -404,11 +404,51 @@
         "description": "Monday — every week",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "weeklyMode"
     },
@@ -418,11 +458,51 @@
         "description": "Monday — this week only",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "!weeklyMode"
     },
@@ -437,11 +517,51 @@
         "description": "Tuesday — every week",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "weeklyMode"
     },
@@ -451,11 +571,51 @@
         "description": "Tuesday — this week only",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "!weeklyMode"
     },
@@ -470,11 +630,51 @@
         "description": "Wednesday — every week",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "weeklyMode"
     },
@@ -484,11 +684,51 @@
         "description": "Wednesday — this week only",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "!weeklyMode"
     },
@@ -503,11 +743,51 @@
         "description": "Thursday — every week",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "weeklyMode"
     },
@@ -517,11 +797,51 @@
         "description": "Thursday — this week only",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "!weeklyMode"
     },
@@ -536,11 +856,51 @@
         "description": "Friday — every week",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "weeklyMode"
     },
@@ -550,11 +910,51 @@
         "description": "Friday — this week only",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "!weeklyMode"
     },
@@ -569,11 +969,51 @@
         "description": "Saturday — every week",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "weeklyMode"
     },
@@ -583,11 +1023,51 @@
         "description": "Saturday — this week only",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "!weeklyMode"
     },
@@ -602,11 +1082,51 @@
         "description": "Sunday — every week",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "weeklyMode"
     },
@@ -616,11 +1136,51 @@
         "description": "Sunday — this week only",
         "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
         "columns": [
-            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
-            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
-            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
-            { "id": "important", "title": "Important", "type": "boolean", "default": false },
-            { "id": "color", "title": "Color", "type": "string", "default": "" }
+            {
+                "id": "title",
+                "title": "Title",
+                "type": "string",
+                "default": "New entry"
+            },
+            {
+                "id": "notes",
+                "title": "Notes",
+                "type": "string",
+                "default": ""
+            },
+            {
+                "id": "todo",
+                "title": "To-do",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "important",
+                "title": "Important",
+                "type": "boolean",
+                "default": false
+            },
+            {
+                "id": "color",
+                "title": "Color",
+                "type": "string",
+                "options": {
+                    "(default)": "",
+                    "🔴 Red": "#e5534b",
+                    "🟠 Orange": "#e67e22",
+                    "🟡 Amber": "#e0a030",
+                    "🟡 Yellow": "#f1c40f",
+                    "🟢 Green": "#6ab04c",
+                    "🩵 Teal": "#3fb0a0",
+                    "🔵 Blue": "#4f9dde",
+                    "🔵 Navy": "#2c6fbb",
+                    "🟣 Purple": "#8e6ad8",
+                    "🩷 Pink": "#d9609a",
+                    "🟤 Brown": "#a0522d",
+                    "⚪ Gray": "#7f8c9a"
+                },
+                "default": ""
+            }
         ],
         "dependency": "!weeklyMode"
     }
