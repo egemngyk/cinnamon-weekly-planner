@@ -10,6 +10,7 @@
             "title": "General",
             "sections": [
                 "secAppearance",
+                "secEntryGrid",
                 "secSize",
                 "secColors",
                 "secFrame",
@@ -172,6 +173,15 @@
                 "showDay6",
                 "weeklyItems6",
                 "weekItems6"
+            ]
+        },
+        "secEntryGrid": {
+            "type": "section",
+            "title": "Entry grid",
+            "keys": [
+                "entryCols",
+                "entryRows",
+                "maxEntriesPerDay"
             ]
         }
     },
@@ -1183,5 +1193,41 @@
             }
         ],
         "dependency": "!weeklyMode"
+    },
+    "entryCols": {
+        "type": "combobox",
+        "default": 1,
+        "description": "Entry columns per day (vertical layout)",
+        "tooltip": "In vertical layout: number of columns for entries inside each day. 1 = stacked vertically, 2–4 = side-by-side in columns.",
+        "dependency": "layoutMode=columns",
+        "options": {
+            "1 column (stacked)": 1,
+            "2 columns (side-by-side)": 2,
+            "3 columns (side-by-side)": 3,
+            "4 columns (side-by-side)": 4
+        }
+    },
+    "entryRows": {
+        "type": "combobox",
+        "default": 0,
+        "description": "Entry rows per day (horizontal layout)",
+        "tooltip": "In horizontal layout: arrangement of entries inside each day row. Stacked = one per line, 1 row = all side-by-side, 2–4 = max rows.",
+        "dependency": "layoutMode=rows",
+        "options": {
+            "Stacked (1 per line)": 0,
+            "1 row (all side-by-side)": 1,
+            "Max 2 rows": 2,
+            "Max 3 rows": 3,
+            "Max 4 rows": 4
+        }
+    },
+    "maxEntriesPerDay": {
+        "type": "spinbutton",
+        "default": 0,
+        "min": 0,
+        "max": 50,
+        "step": 1,
+        "description": "Max entries per day (0 = unlimited)",
+        "tooltip": "Maximum number of entries allowed per day. Exceeding this limit is blocked with a warning dialog. Set to 0 for unlimited."
     }
 }

@@ -64,7 +64,8 @@ const I18N = {
         delEntry: 'Delete entry',
         confirmDel: function (t) { return 'Delete “' + t + '”?'; },
         invalidDate: 'Invalid date — use YYYY-MM-DD',
-        editingWeek: 'Editing'
+        editingWeek: 'Editing',
+        maxReached: function (n) { return 'Max ' + n + ' entries per day reached.'; }
     },
     tr: {
         dayFirst: true,
@@ -87,7 +88,8 @@ const I18N = {
         delEntry: 'Kaydı sil',
         confirmDel: function (t) { return '“' + t + '” silinsin mi?'; },
         invalidDate: 'Geçersiz tarih — YYYY-AA-GG kullanın',
-        editingWeek: 'Düzenlenen'
+        editingWeek: 'Düzenlenen',
+        maxReached: function (n) { return 'Günde en fazla ' + n + ' kayıt eklenebilir.'; }
     }
 };
 
@@ -518,7 +520,8 @@ const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width
     'bgColor', 'textColor', 'accentColor', 'dayHeaderColor', 'borderColor', 'importantColor',
     'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language',
     'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6',
-    'showNotes', 'showCheckbox', 'showStar'];
+    'showNotes', 'showCheckbox', 'showStar',
+    'entryCols', 'entryRows', 'maxEntriesPerDay'];
 
 /* Settings list widgets: [kind, weekday index, settings key].
  * 'weekly' = repeat every week (data.weekly[i]), 'week' = specific week being edited (data.days[date]). */
@@ -654,8 +657,18 @@ PlannerDesklet.prototype = {
         if (Date.now() < this._suppressUntil) return; // echo of our own _pushLists
         try {
             const key = (kind === 'weekly' ? 'weeklyItems' : 'weekItems') + i;
+            let rows = this._getValue(key);
+            const maxPer = +this.cfg_maxEntriesPerDay || 0;
+            if (maxPer > 0 && Array.isArray(rows) && rows.length > maxPer) {
+                rows = rows.slice(0, maxPer);
+                this._setValue(key, rows);
+                try {
+                    const Main = imports.ui.main;
+                    Main.notify('Weekly Planner', this._t('maxReached')(maxPer));
+                } catch (ne) { /* ignore */ }
+            }
             const monday = kind === 'weekly' ? null : iso(this._editMonday());
-            if (Model.applyRows(this.data, monday, i, this._getValue(key))) this._changed();
+            if (Model.applyRows(this.data, monday, i, rows)) this._changed();
         } catch (e) {
             global.logError('[weekly-planner] list sync error: ' + e);
         }
@@ -1009,12 +1022,13 @@ PlannerDesklet.prototype = {
         // inner padding (16) + border + right handle (12) + vertical scrollbar allowance (22)
         const pad2 = this._px(16) + 2 * this.cfg_borderWidth + this._px(12) + this._px(22);
         const gap = this._px(4);
-        // Columns shrink with the width; below 70 px they stop shrinking and horizontal scrolling (overflow) kicks in.
         const vis = this._visibleDays();
         if (!vis.length) { this._body.add_actor(new St.Label({ text: this._t('allHidden') })); return; }
         const colW = Math.max(this._px(70), Math.floor((this.cfg_width - pad2 - (vis.length - 1) * gap) / vis.length));
         const cols = new St.BoxLayout({ style: 'spacing:' + gap + 'px;' });
         const todayStr = this._todayStr, target = this._targetIndex();
+        const nCols = Math.max(1, +this.cfg_entryCols || 1); // entry sub-columns within each day column
+        const sp = this.cfg_compact ? this._px(2) : this._px(4);
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
             const date = week.dates[i];
@@ -1022,9 +1036,23 @@ PlannerDesklet.prototype = {
             btn.set_width(colW);
             const rec = { date: date, box: btn, items: [] };
             this._layout.push(rec);
-            const col = new St.BoxLayout({ vertical: true, style: 'spacing:' + (this.cfg_compact ? 2 : 4) + 'px;' });
+            const col = new St.BoxLayout({ vertical: true, style: 'spacing:' + sp + 'px;' });
             col.add_actor(this._dayHeader(i, date, date === todayStr, false));
-            week.days[i].forEach(function (e) { col.add_actor(this._makeItem(e, date, rec)); }, this);
+            if (nCols <= 1) {
+                week.days[i].forEach(function (e) { col.add_actor(this._makeItem(e, date, rec)); }, this);
+            } else {
+                /* multi-column entry grid: nCols entries side by side, then wrap */
+                let rowBox = null;
+                week.days[i].forEach(function (e, idx) {
+                    if (idx % nCols === 0) {
+                        rowBox = new St.BoxLayout({ style: 'spacing:' + sp + 'px;' });
+                        col.add_actor(rowBox);
+                    }
+                    const item = this._makeItem(e, date, rec);
+                    item.x_expand = true;
+                    rowBox.add_actor(item);
+                }, this);
+            }
             btn.set_child(col);
             cols.add_actor(btn);
         }
@@ -1036,6 +1064,8 @@ PlannerDesklet.prototype = {
         if (!vis.length) { this._body.add_actor(new St.Label({ text: this._t('allHidden') })); return; }
         const rows = new St.BoxLayout({ vertical: true, style: 'spacing:4px;' });
         const todayStr = this._todayStr, target = this._targetIndex();
+        const nRows = +this.cfg_entryRows || 0; // 0 = stacked (1 per line), 1 = all side-by-side, 2..4 = max rows
+        const sp = this.cfg_compact ? this._px(2) : this._px(4);
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
             const date = week.dates[i];
@@ -1044,9 +1074,38 @@ PlannerDesklet.prototype = {
             this._layout.push(rec);
             const row = new St.BoxLayout({ style: 'spacing:8px;' });
             row.add_actor(this._dayHeader(i, date, date === todayStr, true));
-            const list = new St.BoxLayout({ vertical: true, x_expand: true, style: 'spacing:' + (this.cfg_compact ? 2 : 4) + 'px;' });
-            week.days[i].forEach(function (e) { list.add_actor(this._makeItem(e, date, rec)); }, this);
-            row.add_actor(list);
+            const entries = week.days[i] || [];
+            if (nRows === 0) {
+                /* Stacked vertically: each entry on its own line */
+                const list = new St.BoxLayout({ vertical: true, x_expand: true, style: 'spacing:' + sp + 'px;' });
+                entries.forEach(function (e) { list.add_actor(this._makeItem(e, date, rec)); }, this);
+                row.add_actor(list);
+            } else if (nRows === 1) {
+                /* Side-by-side in 1 single horizontal row */
+                const list = new St.BoxLayout({ x_expand: true, style: 'spacing:' + sp + 'px;' });
+                entries.forEach(function (e) {
+                    const item = this._makeItem(e, date, rec);
+                    item.x_expand = true;
+                    list.add_actor(item);
+                }, this);
+                row.add_actor(list);
+            } else {
+                /* Multi-row: wrap into at most nRows rows */
+                const grid = new St.BoxLayout({ vertical: true, x_expand: true, style: 'spacing:' + sp + 'px;' });
+                const numCols = Math.max(1, Math.ceil(entries.length / nRows));
+                for (let r = 0; r < nRows; r++) {
+                    const slice = entries.slice(r * numCols, (r + 1) * numCols);
+                    if (!slice.length && r > 0) break;
+                    const rowBox = new St.BoxLayout({ x_expand: true, style: 'spacing:' + sp + 'px;' });
+                    slice.forEach(function (e) {
+                        const item = this._makeItem(e, date, rec);
+                        item.x_expand = true;
+                        rowBox.add_actor(item);
+                    }, this);
+                    grid.add_actor(rowBox);
+                }
+                row.add_actor(grid);
+            }
             btn.set_child(row);
             rows.add_actor(btn);
         }
@@ -1149,6 +1208,16 @@ PlannerDesklet.prototype = {
             const pos = it.actor.get_transformed_position(), size = it.actor.get_transformed_size();
             if (pos[1] + size[1] / 2 < py) idx++;
         });
+        const maxPer = +this.cfg_maxEntriesPerDay || 0;
+        if (maxPer > 0) {
+            const f = Model.find(this.data, id);
+            if (f && f.date !== rec.date) {
+                const dt = parseIso(rec.date);
+                const weekday = dt ? wd(dt) : -1;
+                const weeklyCount = (weekday >= 0 && this.data.weekly && this.data.weekly[weekday]) ? this.data.weekly[weekday].length : 0;
+                if (((this.data.days[rec.date] || []).length + weeklyCount) >= maxPer) return;
+            }
+        }
         if (Model.move(this.data, id, rec.date, idx)) {
             this.data.ui.selected = rec.date;
             this._scheduleSave();
@@ -1185,6 +1254,22 @@ PlannerDesklet.prototype = {
 
     /* e = entry (edit) or null (new entry at the bottom of dateStr) */
     _openEditorImpl: function (e, dateStr) {
+        /* Max-entries guard: only checked when adding a NEW entry */
+        if (!e) {
+            const maxPer = +this.cfg_maxEntriesPerDay || 0;
+            if (maxPer > 0) {
+                const dt = parseIso(dateStr);
+                const weekday = dt ? wd(dt) : -1;
+                const weeklyCount = (weekday >= 0 && this.data.weekly && this.data.weekly[weekday]) ? this.data.weekly[weekday].length : 0;
+                const cur = (this.data.days[dateStr] || []).length + weeklyCount;
+                if (cur >= maxPer) {
+                    const dlg = this._newDialog(this._t('maxReached')(maxPer));
+                    dlg.setButtons([{ label: 'OK', action: function () { dlg.close(); }, key: Clutter.KEY_Escape }]);
+                    dlg.open();
+                    return;
+                }
+            }
+        }
         const self = this;
         const st = { color: e ? e.color : '', important: e ? !!e.important : false, todo: e ? !!e.todo : false };
         const heading = (e ? this._t('editEntry') : this._t('newEntry')) + ' — ' + longDate(parseIso(dateStr), this.cfg_language);
