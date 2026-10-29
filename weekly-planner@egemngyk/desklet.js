@@ -553,6 +553,7 @@ PlannerDesklet.prototype = {
         this._rsTimer = null;
         this._rsGrab = false;
         this._suppressUntil = 0;
+        this._renderIdle = null;
         try {
             this._setup(metadata, desklet_id);
         } catch (e) {
@@ -638,7 +639,16 @@ PlannerDesklet.prototype = {
 
     _changed: function () {
         this._scheduleSave();
-        this._render();
+        this._queueRender();
+    },
+
+    _queueRender: function () {
+        if (this._renderIdle) return;
+        this._renderIdle = Mainloop.idle_add(function () {
+            this._renderIdle = null;
+            this._render();
+            return false;
+        }.bind(this));
     },
 
     /* ---------------- entry lists (Configure → Entries) ---------------- */
@@ -891,7 +901,7 @@ PlannerDesklet.prototype = {
             this.cfg_width = Math.max(240, Math.min(2400, Math.round(rs.w + px - rs.x)));
         if (rs.kind === 'b' || rs.kind === 'c')
             this.cfg_height = Math.max(160, Math.min(1600, Math.round(rs.h + py - rs.y)));
-        this._onCfgChanged();
+        this._root.set_size(this.cfg_width, this.cfg_height);
     },
 
     _resizeTick: function () {
@@ -925,11 +935,13 @@ PlannerDesklet.prototype = {
         if (this._rsGrab) { try { Clutter.ungrab_pointer(); } catch (e) { /* ignore */ } this._rsGrab = false; }
         const was = !!this._rs;
         this._rs = null;
-        if (save && was) {
-            try {
-                this.settings.setValue('width', this.cfg_width);
-                this.settings.setValue('height', this.cfg_height);
-            } catch (e) { global.logError('[weekly-planner] could not save size: ' + e); }
+        if (was) {
+            if (save) {
+                try {
+                    this.settings.setValue('width', this.cfg_width);
+                    this.settings.setValue('height', this.cfg_height);
+                } catch (e) { global.logError('[weekly-planner] could not save size: ' + e); }
+            }
             this._onCfgChanged();
         }
     },
@@ -989,16 +1001,27 @@ PlannerDesklet.prototype = {
         }
     },
 
-    _dayButton: function (date, isToday, isTarget) {
+    _dayBox: function (date, isToday, isTarget) {
         const t = this._theme;
-        const btn = new St.Button({ style_class: 'wp-day', reactive: true, can_focus: false, y_expand: true });
-        fillActor(btn);
+        const box = new St.BoxLayout({
+            vertical: true,
+            style_class: 'wp-day-box',
+            reactive: true,
+            can_focus: false,
+            y_expand: true
+        });
+        fillActor(box);
         const tint = isToday && this.cfg_highlightToday;
         const border = isTarget ? this._px(2) + 'px solid ' + rgba(t.accent, 0.95)
             : (tint ? '1px solid ' + rgba(t.accent, 0.7) : '1px solid ' + rgba(this.cfg_borderColor, 0.35));
-        btn.style = (tint ? 'background-color:' + rgba(t.accent, 0.16) + '; ' : '') + 'border:' + border + ';';
-        btn.connect('clicked', function () { this._selectDay(date); }.bind(this));
-        return btn;
+        box.style = (tint ? 'background-color:' + rgba(t.accent, 0.16) + '; ' : '') + 'border:' + border + ';';
+        box.connect('button-press-event', function (actor, event) {
+            if (event.get_button() === 1) {
+                this._selectDay(date);
+            }
+            return false;
+        }.bind(this));
+        return box;
     },
 
     _dayHeader: function (i, date, isToday, horizontalRow) {
@@ -1010,10 +1033,10 @@ PlannerDesklet.prototype = {
         else if (style === 'name') { name = lg.days[i]; }
         else { name = lg.daysS[i]; sub = lg.shortDate(d); }
         const color = (isToday && this.cfg_highlightToday) ? readable(t.accent, this.cfg_bgColor) : t.head;
-        const box = new St.BoxLayout({ vertical: true, style: 'padding-bottom:3px;' });
+        const box = new St.BoxLayout({ vertical: true, style_class: 'wp-day-header' });
         const l1 = new St.Label({ text: name, style: 'font-weight:bold; color:' + color + ';' });
         box.add_actor(l1);
-        if (sub) box.add_actor(new St.Label({ text: sub, style: 'color:' + color + '; font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:200;' }));
+        if (sub) box.add_actor(new St.Label({ text: sub, style: 'color:' + color + '; font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:0.8;' }));
         if (horizontalRow) box.set_width(Math.round(t.fs * 7));
         return box;
     },
@@ -1032,7 +1055,7 @@ PlannerDesklet.prototype = {
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
             const date = week.dates[i];
-            const btn = this._dayButton(date, date === todayStr, i === target);
+            const btn = this._dayBox(date, date === todayStr, i === target);
             btn.set_width(colW);
             const rec = { date: date, box: btn, items: [] };
             this._layout.push(rec);
@@ -1053,7 +1076,7 @@ PlannerDesklet.prototype = {
                     rowBox.add_actor(item);
                 }, this);
             }
-            btn.set_child(col);
+            btn.add_actor(col);
             cols.add_actor(btn);
         }
         this._body.add_actor(cols);
@@ -1069,7 +1092,7 @@ PlannerDesklet.prototype = {
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
             const date = week.dates[i];
-            const btn = this._dayButton(date, date === todayStr, i === target);
+            const btn = this._dayBox(date, date === todayStr, i === target);
             const rec = { date: date, box: btn, items: [] };
             this._layout.push(rec);
             const row = new St.BoxLayout({ style: 'spacing:8px;' });
@@ -1106,7 +1129,7 @@ PlannerDesklet.prototype = {
                 }
                 row.add_actor(grid);
             }
-            btn.set_child(row);
+            btn.add_actor(row);
             rows.add_actor(btn);
         }
         this._body.add_actor(rows);
@@ -1117,20 +1140,31 @@ PlannerDesklet.prototype = {
         const color = e.color || t.accent;
         const ds = this.cfg_doneStyle;
         const todo = !!e.todo, done = todo && e.done;
-        const btn = new St.Button({ reactive: true, can_focus: false, x_expand: true });
+        const strike = done && (ds === 'strike' || ds === 'both');
+
+        const btn = new St.Button({
+            style_class: 'wp-item' + (e.important ? ' wp-item-important' : ''),
+            reactive: true,
+            can_focus: false,
+            x_expand: true
+        });
         fillActor(btn);
+
         const edge = e.important ? t.imp : color;
-        btn.style = 'border-left:' + this._px(3) + 'px solid ' + edge + '; border-radius:4px; background-color:' +
-            rgba(color, e.important ? 0.30 : 0.17) + '; padding:' + (compact ? this._px(1) + 'px ' + this._px(4) + 'px' : this._px(4) + 'px ' + this._px(6) + 'px') + ';' +
-            (e.important ? ' border-top:1px solid ' + rgba(t.imp, 0.6) + '; border-bottom:1px solid ' + rgba(t.imp, 0.6) + ';' : '');
+        btn.style = 'border-left-color:' + edge + '; background-color:' + rgba(color, e.important ? 0.30 : 0.16) + ';';
         if (this._drag && this._drag.id === e.id) btn.opacity = 110;
         else if (done && (ds === 'dim' || ds === 'both')) btn.opacity = 120;
 
-        const row = new St.BoxLayout({ style: 'spacing:4px;' });
+        const row = new St.BoxLayout({ style_class: 'wp-item-row' });
 
-        // drag grip: pressing it starts a drag (the press is consumed so the entry is not clicked / the desklet not dragged)
-        const grip = new St.Bin({ reactive: true, track_hover: true, can_focus: false, y_align: Clutter.ActorAlign.CENTER });
-        grip.set_child(new St.Label({ text: '≡', style: 'padding:0 2px; opacity:150; color:' + t.text + ';' }));
+        // Grip: directly an St.Label, no redundant St.Bin wrapper
+        const grip = new St.Label({
+            text: '≡',
+            style_class: 'wp-grip',
+            reactive: true,
+            can_focus: false,
+            y_align: Clutter.ActorAlign.CENTER
+        });
         grip.connect('button-press-event', function (actor, event) {
             if (event.get_button() !== 1) return false;
             this._startDrag(e.id);
@@ -1139,8 +1173,14 @@ PlannerDesklet.prototype = {
         row.add_actor(grip);
 
         if (todo && this.cfg_showCheckbox !== false) {
-            const chk = new St.Button({ label: done ? '☑' : '☐', reactive: true, can_focus: false });
-            chk.style = 'padding:0 2px; color:' + t.text + ';';
+            const chk = new St.Button({
+                label: done ? '☑' : '☐',
+                style_class: 'wp-chk',
+                reactive: true,
+                can_focus: false,
+                y_align: Clutter.ActorAlign.CENTER
+            });
+            chk.style = 'color:' + t.text + ';';
             chk.connect('clicked', function () {
                 Model.toggleDone(e);
                 this._changed();
@@ -1148,25 +1188,36 @@ PlannerDesklet.prototype = {
             row.add_actor(chk);
         }
 
-        const col = new St.BoxLayout({ vertical: true, x_expand: true });
-        const strike = done && (ds === 'strike' || ds === 'both');
+        let titleClass = 'wp-title';
+        if (e.important) titleClass += ' wp-bold';
+        if (strike) titleClass += ' wp-strike';
+
         const title = new St.Label({
             text: (e.important && this.cfg_showStar !== false ? '★ ' : '') + trunc(e.title, compact ? 60 : 120),
-            style: (e.important ? 'font-weight:bold; ' : '') + (strike ? 'text-decoration:line-through; ' : '')
+            style_class: titleClass,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER
         });
         const ct = title.clutter_text;
-        if (compact) { ct.set_line_wrap(false); ct.set_ellipsize(Pango.EllipsizeMode.END); }
-        else { ct.set_line_wrap(true); ct.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR); ct.set_ellipsize(Pango.EllipsizeMode.NONE); }
-        col.add_actor(title);
+        ct.set_line_wrap(false);
+        ct.set_ellipsize(Pango.EllipsizeMode.END);
 
         if (!compact && e.notes && this.cfg_showNotes !== false) {
+            const col = new St.BoxLayout({ vertical: true, x_expand: true });
+            col.add_actor(title);
             const first = trunc(e.notes.split('\n')[0], 70);
-            const nl = new St.Label({ text: first, style: 'font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:200;' });
+            const nl = new St.Label({
+                text: first,
+                style_class: 'wp-notes-lbl'
+            });
             nl.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
             col.add_actor(nl);
+            row.add_actor(col);
+        } else {
+            row.add_actor(title);
         }
-        row.add_actor(col);
-        btn.set_child(row);
+
+        btn.add_actor(row);
         btn.connect('clicked', function () { this._openEditor(e, date); }.bind(this));
         rec.items.push({ id: e.id, actor: btn });
         return btn;
@@ -1187,6 +1238,9 @@ PlannerDesklet.prototype = {
         try {
             const p = global.get_pointer(); // [x, y, modifiers]
             if (!(p[2] & Clutter.ModifierType.BUTTON1_MASK)) { this._dragTimer = null; this._endDrag(); return false; }
+            if (this._drag.lastX === p[0] && this._drag.lastY === p[1]) return true;
+            this._drag.lastX = p[0];
+            this._drag.lastY = p[1];
             this._dragTo(p[0], p[1]);
         } catch (e) { global.logError('[weekly-planner] drag error: ' + e); }
         return true;
@@ -1340,6 +1394,7 @@ PlannerDesklet.prototype = {
         if (this._dragTimer) { Mainloop.source_remove(this._dragTimer); this._dragTimer = null; }
         if (this._dayTimer) { Mainloop.source_remove(this._dayTimer); this._dayTimer = null; }
         if (this._cfgIdle) { Mainloop.source_remove(this._cfgIdle); this._cfgIdle = null; }
+        if (this._renderIdle) { Mainloop.source_remove(this._renderIdle); this._renderIdle = null; }
         if (this._saveTimer) { Mainloop.source_remove(this._saveTimer); this._saveTimer = null; }
         this._saveNow(); // flush pending changes; the data file is intentionally left in place (so nothing is lost on reload)
         try { this.settings.finalize(); } catch (e) { /* ignore */ }

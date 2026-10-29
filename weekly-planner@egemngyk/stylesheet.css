@@ -1,5 +1,70 @@
-/* Weekly Planner — static styles (dynamic colors are applied inline in desklet.js) */
-.wp-nav { border-radius: 6px; }
-.wp-nav:hover { background-color: rgba(255,255,255,0.14); }
-.wp-day { border-radius: 6px; padding: 4px; }
-.wp-day:hover { background-color: rgba(255,255,255,0.05); }
+/* Weekly Planner — Stylesheet */
+
+.wp-nav {
+    border-radius: 6px;
+}
+.wp-nav:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.wp-day-box {
+    border-radius: 6px;
+    padding: 4px;
+}
+
+.wp-day-header {
+    padding-bottom: 3px;
+}
+
+.wp-item {
+    border-radius: 4px;
+    padding: 3px 5px;
+    border-left-width: 3px;
+    border-left-style: solid;
+}
+.wp-item:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+.wp-item-important {
+    border-top-width: 1px;
+    border-top-style: solid;
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    border-top-color: rgba(255, 196, 60, 0.55);
+    border-bottom-color: rgba(255, 196, 60, 0.55);
+}
+
+.wp-item-row {
+    spacing: 4px;
+}
+
+.wp-grip {
+    padding: 0 3px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+.wp-grip:hover {
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.wp-chk {
+    padding: 0 2px;
+}
+
+.wp-title {
+    font-size: 1em;
+}
+
+.wp-bold {
+    font-weight: bold;
+}
+
+.wp-strike {
+    text-decoration: line-through;
+}
+
+.wp-notes-lbl {
+    font-size: 0.82em;
+    opacity: 0.75;
+}
