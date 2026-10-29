@@ -13,7 +13,12 @@ Then: **System Settings → Desklets → Weekly Planner → +**.
 Add the desklet as many times as you like; each one starts empty and independent. If it doesn't show up, press `Alt+F2`, type `r`, and hit Enter.
 
 ## Usage
-- Click an empty day area to add a new entry. Click an entry to see details, edit or delete it.
+- Click an empty day area (or **＋**) to add a new entry. Click an entry to see details, edit or delete it.
+- **New/edit dialog:** choose *Repeat* first.
+  - *Repeat every week* shows only the seven weekdays (Mon–Sun) — pick the weekday the entry repeats on.
+  - *Selected date only* shows the seven days of a week with their dates. Use ‹ › or **Today** to change the week,
+    or type any date in the *Go to date* box and press **Go** to open that date's week, then click the day.
+- **Content settings:** Configure → *Content* toggles the notes preview, the due date, the completion checkbox and the ★ marker.
 - ☐/☑ toggles completion (the entry is not deleted; the state belongs only to that week's occurrence).
 - In the header: ‹ › week navigation, **Today**, **＋**.
 - **Repeat:** "Selected date only" or "Repeat every week". When editing or deleting a weekly entry you choose

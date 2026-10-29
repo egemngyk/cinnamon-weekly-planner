@@ -46,7 +46,8 @@ const I18N = {
         cancel: 'Cancel', save: 'Save', del: 'Delete',
         newEntry: 'New entry', editEntry: 'Edit entry',
         fTitle: 'Title', fNotes: 'Notes', fColor: 'Color', fDate: 'Date', fRepeat: 'Repeat',
-        fDue: 'End / due date', fPriority: 'Priority',
+        fDue: 'End / due date', fPriority: 'Priority', fDay: 'Day', go: 'Go',
+        repeatsEvery: function (d) { return 'Repeats every ' + d; },
         hintTitle: 'Title', hintNotes: 'Description / notes (optional)',
         hintDate: 'YYYY-MM-DD', hintDue: 'YYYY-MM-DD (optional)',
         colorDefault: 'Default', invalidDate: 'Invalid date',
@@ -77,7 +78,8 @@ const I18N = {
         cancel: 'İptal', save: 'Kaydet', del: 'Sil',
         newEntry: 'Yeni kayıt', editEntry: 'Kaydı düzenle',
         fTitle: 'Başlık', fNotes: 'Not', fColor: 'Renk', fDate: 'Tarih', fRepeat: 'Tekrar',
-        fDue: 'Bitiş / teslim tarihi', fPriority: 'Önem',
+        fDue: 'Bitiş / teslim tarihi', fPriority: 'Önem', fDay: 'Gün', go: 'Git',
+        repeatsEvery: function (d) { return 'Her ' + d + ' tekrarlanır'; },
         hintTitle: 'Başlık', hintNotes: 'Açıklama / not (isteğe bağlı)',
         hintDate: 'YYYY-AA-GG', hintDue: 'YYYY-AA-GG (isteğe bağlı)',
         colorDefault: 'Varsayılan', invalidDate: 'Geçersiz tarih',
@@ -426,7 +428,8 @@ function mkEntry(text, hint, width) {
 const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width', 'height', 'fontSize',
     'bgColor', 'textColor', 'accentColor', 'dayHeaderColor', 'borderColor', 'importantColor',
     'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language',
-    'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6'];
+    'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6',
+    'showNotes', 'showDue', 'showCheckbox', 'showStar'];
 
 function PlannerDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
@@ -857,18 +860,20 @@ PlannerDesklet.prototype = {
         if (o.done && (ds === 'dim' || ds === 'both')) btn.opacity = 120;
 
         const row = new St.BoxLayout({ style: 'spacing:4px;' });
-        const chk = new St.Button({ label: o.done ? '☑' : '☐', reactive: true, can_focus: false });
-        chk.style = 'padding:0 2px; color:' + t.text + ';';
-        chk.connect('clicked', function () {
-            Model.toggleDone(this.data, o);
-            this._changed();
-        }.bind(this));
-        row.add_actor(chk);
+        if (this.cfg_showCheckbox !== false) {
+            const chk = new St.Button({ label: o.done ? '☑' : '☐', reactive: true, can_focus: false });
+            chk.style = 'padding:0 2px; color:' + t.text + ';';
+            chk.connect('clicked', function () {
+                Model.toggleDone(this.data, o);
+                this._changed();
+            }.bind(this));
+            row.add_actor(chk);
+        }
 
         const col = new St.BoxLayout({ vertical: true, x_expand: true });
         const strike = o.done && (ds === 'strike' || ds === 'both');
         const title = new St.Label({
-            text: (f.important ? '★ ' : '') + trunc(f.title, compact ? 60 : 120),
+            text: (f.important && this.cfg_showStar !== false ? '★ ' : '') + trunc(f.title, compact ? 60 : 120),
             style: (f.important ? 'font-weight:bold; ' : '') + (strike ? 'text-decoration:line-through; ' : '')
         });
         const ct = title.clutter_text;
@@ -878,13 +883,13 @@ PlannerDesklet.prototype = {
 
         const small = 'font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:200;';
         const meta = [];
-        if (f.due) { const d = parseIso(f.due); if (d) meta.push(this._L().dueLabel(d.getDate(), this._L().monthsS[d.getMonth()])); }
+        if (f.due && this.cfg_showDue !== false) { const d = parseIso(f.due); if (d) meta.push(this._L().dueLabel(d.getDate(), this._L().monthsS[d.getMonth()])); }
         if (meta.length) {
             const ml = new St.Label({ text: meta.join(' · '), style: small });
             ml.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
             col.add_actor(ml);
         }
-        if (!compact && f.notes) {
+        if (!compact && f.notes && this.cfg_showNotes !== false) {
             const first = trunc(f.notes.split('\n')[0], 70);
             const nl = new St.Label({ text: first, style: small });
             nl.clutter_text.set_ellipsize(Pango.EllipsizeMode.END);
@@ -922,14 +927,25 @@ PlannerDesklet.prototype = {
         dlg.open();
     },
 
-    /* o = occurrence (edit) or null (new); dateStr = date for a new entry */
+    /* Click handler wrapper: a failure is logged instead of silently doing nothing. */
     _openEditor: function (o, dateStr) {
+        try { this._openEditorImpl(o, dateStr); } catch (e) {
+            global.logError('[weekly-planner] could not open the editor: ' + e + '\n' + (e && e.stack ? e.stack : ''));
+        }
+    },
+
+    /* o = occurrence (edit) or null (new); dateStr = date for a new entry */
+    _openEditorImpl: function (o, dateStr) {
         const self = this;
+        const lg = this._L();
         const f = o ? o.f : { title: '', notes: '', color: null, important: false, due: '' };
+        const base = o ? o.date : dateStr;
         const st = {
             repeat: o ? o.item.kind === 'weekly' : false,
             color: f.color || null,
-            important: !!f.important
+            important: !!f.important,
+            date: base,                      // chosen date (ISO)
+            wk: mondayOf(parseIso(base))     // Monday of the week shown in the picker
         };
         const dlg = this._newDialog(o ? this._t('editEntry') : this._t('newEntry'));
         const L = dlg.contentLayout;
@@ -949,36 +965,102 @@ PlannerDesklet.prototype = {
         }));
         L.add_actor(field(this._t('fColor'), chipRow(colOpts, function () { return st.color; }, function (v) { st.color = v; }, 6)));
 
-        // date
-        const dateBox = new St.BoxLayout({ style: 'spacing:6px;' });
-        const dateE = mkEntry(o ? o.date : dateStr, this._t('hintDate'), 130);
-        const wdL = new St.Label({ text: '', y_align: Clutter.ActorAlign.CENTER, style: 'min-width:80px;' });
-        const refreshWd = function () {
-            const d = parseIso(dateE.get_text().trim());
-            wdL.set_text(d ? this._L().days[wd(d)] : this._t('invalidDate'));
+        const errL = new St.Label({ text: '', style: 'color:#ff7b72; padding-top:6px;' });
+
+        /* ---- repeat mode + day/date picker ---- */
+        const accent = this._theme.accent;
+        const dayStyle = function (on, isToday) {
+            return 'padding:3px 4px; min-width:42px; border-radius:6px; color:#ffffff; border:1px solid ' +
+                (on ? rgba(accent, 0.95) : (isToday ? rgba(accent, 0.6) : 'rgba(255,255,255,0.25)')) +
+                '; background-color:' + (on ? rgba(accent, 0.7) : 'rgba(255,255,255,0.06)') + ';';
         };
-        const shift = function (n) {
-            const d = parseIso(dateE.get_text().trim()) || parseIso(o ? o.date : dateStr);
-            dateE.set_text(iso(addDays(d, n)));
-            refreshWd();
-        };
-        const mkBtn = function (label, cb) {
-            const b = new St.Button({ label: label, reactive: true, can_focus: true, style: chipStyle(false) });
+        const mkBtn = function (label, cb, style) {
+            const b = new St.Button({ label: label, reactive: true, can_focus: true, style: style || chipStyle(false) });
             b.connect('clicked', cb);
             return b;
         };
-        dateBox.add_actor(mkBtn('−', function () { shift(-1); }));
-        dateBox.add_actor(dateE);
-        dateBox.add_actor(mkBtn('+', function () { shift(1); }));
-        dateBox.add_actor(wdL);
-        dateE.clutter_text.connect('text-changed', refreshWd);
-        refreshWd();
-        L.add_actor(field(this._t('fDate'), dateBox));
+
+        const pickBox = new St.BoxLayout({ vertical: true, style: 'spacing:4px;' });
+        const pickLbl = new St.Label({ text: '', style: 'font-size:11px; opacity:170;' });
+
+        // week navigation + "go to date" (only for the single-date mode)
+        const navRow = new St.BoxLayout({ style: 'spacing:6px;' });
+        const weekLbl = new St.Label({ text: '', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
+        const jumpRow = new St.BoxLayout({ style: 'spacing:6px;' });
+        const jumpE = mkEntry('', this._t('hintDate'), 130);
+        const daysRow = new St.BoxLayout({ style: 'spacing:4px;' });
+        const infoL = new St.Label({ text: '', style: 'font-size:11px; opacity:170;' });
+
+        const moveWeek = function (n) {
+            st.wk = addDays(st.wk, 7 * n);
+            st.date = iso(addDays(st.wk, wd(parseIso(st.date)))); // keep the same weekday in the new week
+            renderPicker();
+        };
+        const gotoDate = function (d) {
+            st.wk = mondayOf(d);
+            st.date = iso(d);
+            renderPicker();
+        };
+        navRow.add_actor(mkBtn('‹', function () { moveWeek(-1); }));
+        navRow.add_actor(weekLbl);
+        navRow.add_actor(mkBtn('›', function () { moveWeek(1); }));
+        navRow.add_actor(mkBtn(this._t('today'), function () { gotoDate(today()); }));
+        jumpRow.add_actor(jumpE);
+        jumpRow.add_actor(mkBtn(this._t('go'), function () {
+            const d = parseIso(jumpE.get_text().trim());
+            if (!d) { errL.set_text(self._t('invalidDate')); return; }
+            errL.set_text('');
+            gotoDate(d);
+        }));
+        pickBox.add_actor(navRow);
+        pickBox.add_actor(jumpRow);
+        pickBox.add_actor(daysRow);
+        pickBox.add_actor(infoL);
+
+        const renderPicker = function () {
+            daysRow.destroy_all_children();
+            const cur = parseIso(st.date);
+            if (st.repeat) {
+                // weekly mode: only the 7 weekdays (no dates)
+                pickLbl.set_text(self._t('fDay'));
+                navRow.hide(); jumpRow.hide();
+                st.wk = mondayOf(cur);
+                for (let i = 0; i < 7; i++) {
+                    (function (i) {
+                        daysRow.add_actor(mkBtn(lg.daysS[i], function () { st.date = iso(addDays(st.wk, i)); renderPicker(); },
+                            dayStyle(wd(cur) === i, false)));
+                    })(i);
+                }
+                infoL.set_text(self._t('repeatsEvery')(lg.days[wd(cur)]));
+            } else {
+                // single-date mode: the 7 days of the shown week, navigable to any date
+                pickLbl.set_text(self._t('fDate'));
+                navRow.show(); jumpRow.show();
+                weekLbl.set_text(formatRange(st.wk, 'short', self.cfg_language));
+                const todayIso = iso(today());
+                for (let i = 0; i < 7; i++) {
+                    (function (i) {
+                        const d = addDays(st.wk, i), di = iso(d);
+                        daysRow.add_actor(mkBtn(lg.daysS[i] + '\n' + d.getDate(), function () { st.date = di; renderPicker(); },
+                            dayStyle(di === st.date, di === todayIso)));
+                    })(i);
+                }
+                infoL.set_text(lg.days[wd(cur)] + ' · ' + (lg.dayFirst
+                    ? cur.getDate() + ' ' + lg.months[cur.getMonth()] + ' ' + cur.getFullYear()
+                    : lg.months[cur.getMonth()] + ' ' + cur.getDate() + ', ' + cur.getFullYear()));
+            }
+        };
 
         L.add_actor(field(this._t('fRepeat'), chipRow([
             { label: this._t('repeatOnce'), value: false },
             { label: this._t('repeatWeekly'), value: true }
-        ], function () { return st.repeat; }, function (v) { st.repeat = v; }, 2)));
+        ], function () { return st.repeat; }, function (v) { st.repeat = v; renderPicker(); }, 2)));
+
+        const pickField = new St.BoxLayout({ vertical: true, style: 'spacing:3px; padding-top:7px;' });
+        pickField.add_actor(pickLbl);
+        pickField.add_actor(pickBox);
+        L.add_actor(pickField);
+        renderPicker();
 
         const dueE = mkEntry(f.due, this._t('hintDue'), 180);
         L.add_actor(field(this._t('fDue'), dueE));
@@ -988,14 +1070,13 @@ PlannerDesklet.prototype = {
             { label: this._t('important'), value: true, color: this._theme.imp }
         ], function () { return st.important; }, function (v) { st.important = v; }, 2)));
 
-        const errL = new St.Label({ text: '', style: 'color:#ff7b72; padding-top:6px;' });
         L.add_actor(errL);
 
         const onSave = function () {
             const err = function (m) { errL.set_text(m); };
             const title = titleE.get_text().trim();
             if (!title) return err(self._t('errTitle'));
-            const date = dateE.get_text().trim();
+            const date = st.date;
             if (!parseIso(date)) return err(self._t('errDate'));
             const due = dueE.get_text().trim();
             if (due && !parseIso(due)) return err(self._t('errDue'));

@@ -81,6 +81,30 @@
         "default": true,
         "description": "Show Sunday"
     },
+    "headerContent": {
+        "type": "header",
+        "description": "Content"
+    },
+    "showNotes": {
+        "type": "switch",
+        "default": true,
+        "description": "Show notes preview"
+    },
+    "showDue": {
+        "type": "switch",
+        "default": true,
+        "description": "Show due date"
+    },
+    "showCheckbox": {
+        "type": "switch",
+        "default": true,
+        "description": "Show completion checkbox"
+    },
+    "showStar": {
+        "type": "switch",
+        "default": true,
+        "description": "Show ★ on important entries"
+    },
     "header1": {
         "type": "header",
         "description": "Size"
