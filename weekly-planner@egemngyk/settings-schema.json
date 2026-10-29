@@ -1,47 +1,7 @@
 {
-    "layout": {
-        "type": "layout",
-        "pages": ["page-general", "page-colors", "page-style"],
-        "page-general": {
-            "type": "page",
-            "title": "Genel",
-            "sections": ["sec-view", "sec-size"]
-        },
-        "page-colors": {
-            "type": "page",
-            "title": "Renkler",
-            "sections": ["sec-colors"]
-        },
-        "page-style": {
-            "type": "page",
-            "title": "Biçim",
-            "sections": ["sec-look", "sec-format"]
-        },
-        "sec-view": {
-            "type": "section",
-            "title": "Görünüm",
-            "keys": ["layoutMode", "compact", "highlightToday", "doneStyle"]
-        },
-        "sec-size": {
-            "type": "section",
-            "title": "Boyut",
-            "keys": ["width", "height", "fontSize"]
-        },
-        "sec-colors": {
-            "type": "section",
-            "title": "Renkler",
-            "keys": ["bgColor", "textColor", "accentColor", "dayHeaderColor", "borderColor", "importantColor"]
-        },
-        "sec-look": {
-            "type": "section",
-            "title": "Çerçeve ve saydamlık",
-            "keys": ["opacity", "borderWidth", "borderRadius"]
-        },
-        "sec-format": {
-            "type": "section",
-            "title": "Başlık biçimleri",
-            "keys": ["dateFormat", "headerStyle"]
-        }
+    "header0": {
+        "type": "header",
+        "description": "Görünüm"
     },
     "layoutMode": {
         "type": "combobox",
@@ -72,6 +32,10 @@
             "Üstü çizili ve soluk": "both"
         }
     },
+    "header1": {
+        "type": "header",
+        "description": "Boyut"
+    },
     "width": {
         "type": "spinbutton",
         "default": 620,
@@ -98,6 +62,10 @@
         "step": 1,
         "units": "px",
         "description": "Yazı boyutu"
+    },
+    "header2": {
+        "type": "header",
+        "description": "Renkler"
     },
     "bgColor": {
         "type": "colorchooser",
@@ -129,6 +97,10 @@
         "default": "rgb(255,196,60)",
         "description": "Önemli kayıt vurgusu"
     },
+    "header3": {
+        "type": "header",
+        "description": "Çerçeve ve saydamlık"
+    },
     "opacity": {
         "type": "scale",
         "default": 92,
@@ -154,6 +126,10 @@
         "step": 1,
         "units": "px",
         "description": "Köşe yuvarlaklığı"
+    },
+    "header4": {
+        "type": "header",
+        "description": "Başlık biçimleri"
     },
     "dateFormat": {
         "type": "combobox",

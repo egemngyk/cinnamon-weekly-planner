@@ -13,7 +13,7 @@ Aynı bileşeni istediğiniz kadar ekleyin; her biri boş ve bağımsız başlar
 ## Kullanım
 - Boş gün alanına tıkla → yeni kayıt. Kayda tıkla → ayrıntı / düzenle / sil.
 - ☐/☑ ile tamamlama (kayıt silinmez; durum yalnızca o haftanın örneğine bağlıdır).
-- Başlıkta ‹ › hafta gezinme, **Bugün**, **＋**. Sağ tık menüsü: *Kategorileri düzenle*, *Bu haftaya git*, *Yapılandır* (görünüm ayarları).
+- Başlıkta ‹ › hafta gezinme, **Bugün**, **＋**. Sağ tık menüsü: *Genişlik/Yükseklik ±60*, *Bu haftaya git*, *Yapılandır* (görünüm ayarları).
 - **Tekrar:** "Yalnızca seçilen tarih" veya "Her hafta tekrarla". Haftalık kaydı düzenlerken/silerken
   *Yalnızca bu hafta* veya *Bu ve sonraki haftalar* (silmede: bu haftadan itibaren tekrarı sonlandır) seçilir.
 
@@ -28,7 +28,7 @@ Aynı bileşeni istediğiniz kadar ekleyin; her biri boş ve bağımsız başlar
 ## Desteklenen sürüm / varsayımlar
 - Hedef: Cinnamon 5.x ve 6.x (Linux Mint 21/22). `Desklet`, `DeskletSettings`, `ModalDialog`, `St` API'leri kullanılır;
   Node/Electron/web bağımlılığı yoktur. 4.x'te de çalışması beklenir ama doğrulanmadı.
-- Tarih girişi `YYYY-AA-GG` (±1 gün düğmeleriyle), saat `SS:DD`. Gün adları/aylar Türkçe sabittir.
+- Tarih girişi `YYYY-AA-GG` (±1 gün düğmeleriyle), Gün adları/aylar Türkçe sabittir.
 - "Bu ve sonraki haftalar" düzenlemesi seriyi böler; önceki haftalar eski haliyle kalır.
 
 ## Geliştirme / hata ayıklama

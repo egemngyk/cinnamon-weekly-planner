@@ -27,15 +27,7 @@ const MONTHS_S = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl
 const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
 const DAYS_S = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const PALETTE = ['#4f9dde', '#e5534b', '#e0a030', '#8e6ad8', '#3fb0a0', '#7f8c9a', '#d9609a', '#6ab04c', '#e67e22', '#2c3e50'];
-const DEFAULT_CATS = [
-    ['cat-ders', 'Ders', '#4f9dde'],
-    ['cat-sinav', 'Sınav', '#e5534b'],
-    ['cat-odev', 'Ödev', '#e0a030'],
-    ['cat-etkinlik', 'Etkinlik', '#8e6ad8'],
-    ['cat-hatirlatma', 'Hatırlatma', '#3fb0a0'],
-    ['cat-gorev', 'Genel görev', '#7f8c9a']
-];
-const FIELDS = ['title', 'notes', 'categoryId', 'color', 'important', 'startTime', 'endTime', 'due'];
+const FIELDS = ['title', 'notes', 'color', 'important', 'due'];
 
 /* ------------------------------------------------------------------ */
 /* Tarih / renk yardımcıları                                           */
@@ -54,15 +46,6 @@ function wd(d) { return (d.getDay() + 6) % 7; } // Pazartesi = 0
 function mondayOf(d) { return addDays(d, -wd(d)); }
 function today() { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate(), 12); }
 function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
-function parseTime(s) {
-    s = (s || '').trim();
-    if (!s) return '';
-    const m = /^(\d{1,2})[:.](\d{2})$/.exec(s);
-    if (!m) return null;
-    const h = +m[1], mi = +m[2];
-    if (h > 23 || mi > 59) return null;
-    return pad(h) + ':' + pad(mi);
-}
 function trunc(s, n) { s = s || ''; return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
 function parseColor(c) {
@@ -107,7 +90,6 @@ function formatRange(s, fmt) {
  * data = {
  *   version: 1,
  *   ui: { weekOffset },
- *   categories: [{id, name, color}],
  *   items: [
  *     {id, kind:'once',   date,                       ...FIELDS},
  *     {id, kind:'weekly', weekday, startDate, endDate, ...FIELDS}   // endDate: dahil, null = süresiz
@@ -121,7 +103,6 @@ const Model = {
         return {
             version: 1,
             ui: { weekOffset: 0 },
-            categories: DEFAULT_CATS.map(function (c) { return { id: c[0], name: c[1], color: c[2] }; }),
             items: [],
             occ: {}
         };
@@ -137,13 +118,6 @@ const Model = {
     normalize: function (raw) {
         const d = Model.defaults();
         if (!raw || typeof raw !== 'object') return d;
-        if (Array.isArray(raw.categories)) {
-            d.categories = raw.categories.filter(function (c) {
-                return c && typeof c.id === 'string' && typeof c.name === 'string';
-            }).map(function (c) {
-                return { id: c.id, name: c.name, color: typeof c.color === 'string' ? c.color : '#7f8c9a' };
-            });
-        }
         if (Array.isArray(raw.items)) {
             d.items = [];
             raw.items.forEach(function (it) {
@@ -151,11 +125,8 @@ const Model = {
                 const base = {
                     id: it.id, title: it.title,
                     notes: typeof it.notes === 'string' ? it.notes : '',
-                    categoryId: typeof it.categoryId === 'string' ? it.categoryId : null,
                     color: typeof it.color === 'string' ? it.color : null,
                     important: !!it.important,
-                    startTime: parseTime(it.startTime) || '',
-                    endTime: parseTime(it.endTime) || '',
                     due: parseIso(it.due) ? it.due : ''
                 };
                 if (it.kind === 'once' && parseIso(it.date)) {
@@ -205,13 +176,6 @@ const Model = {
                     if (o) days[i].push(o);
                 }
             }
-        });
-        days.forEach(function (list) {
-            list.sort(function (a, b) {
-                const ta = a.f.startTime || '99:99', tb = b.f.startTime || '99:99';
-                if (ta !== tb) return ta < tb ? -1 : 1;
-                return (a.f.title || '').localeCompare(b.f.title || '');
-            });
         });
         return { dates: dates, days: days };
     },
@@ -492,9 +456,19 @@ PlannerDesklet.prototype = {
     },
 
     _setupMenu: function () {
+        const self = this;
+        const bump = function (key, delta, min, max) {
+            const v = Math.max(min, Math.min(max, self['cfg_' + key] + delta));
+            try { self.settings.setValue(key, v); } catch (e) { /* yut */ }
+            self['cfg_' + key] = v;
+            self._onCfgChanged();
+        };
         try {
-            this._menu.addAction('Kategorileri düzenle…', function () { this._openCategories(); }.bind(this));
-            this._menu.addAction('Bu haftaya git', function () { this._gotoWeek(0); }.bind(this));
+            this._menu.addAction('Genişlik +60', function () { bump('width', 60, 240, 2400); });
+            this._menu.addAction('Genişlik −60', function () { bump('width', -60, 240, 2400); });
+            this._menu.addAction('Yükseklik +60', function () { bump('height', 60, 160, 1600); });
+            this._menu.addAction('Yükseklik −60', function () { bump('height', -60, 160, 1600); });
+            this._menu.addAction('Bu haftaya git', function () { self._gotoWeek(0); });
         } catch (e) {
             global.logError('[weekly-planner] menü eklenemedi: ' + e);
         }
@@ -628,9 +602,7 @@ PlannerDesklet.prototype = {
     },
 
     _colorOf: function (f) {
-        if (f.color) return f.color;
-        const c = this.data.categories.filter(function (x) { return x.id === f.categoryId; })[0];
-        return c ? c.color : this._theme.accent;
+        return f.color || this._theme.accent;
     },
 
     _makeItem: function (o) {
@@ -666,7 +638,6 @@ PlannerDesklet.prototype = {
 
         const small = 'font-size:' + Math.round(t.fs * 0.85) + 'px; opacity:200;';
         const meta = [];
-        if (f.startTime) meta.push(f.endTime ? f.startTime + '–' + f.endTime : f.startTime);
         if (f.due) { const d = parseIso(f.due); if (d) meta.push('teslim ' + d.getDate() + ' ' + MONTHS_S[d.getMonth()]); }
         if (meta.length) {
             const ml = new St.Label({ text: meta.join(' · '), style: small });
@@ -714,10 +685,9 @@ PlannerDesklet.prototype = {
     /* o = örnek (düzenleme) veya null (yeni); dateStr = yeni kayıt için tarih */
     _openEditor: function (o, dateStr) {
         const self = this;
-        const f = o ? o.f : { title: '', notes: '', categoryId: null, color: null, important: false, startTime: '', endTime: '', due: '' };
+        const f = o ? o.f : { title: '', notes: '', color: null, important: false, due: '' };
         const st = {
             repeat: o ? o.item.kind === 'weekly' : false,
-            categoryId: f.categoryId || null,
             color: f.color || null,
             important: !!f.important
         };
@@ -734,12 +704,7 @@ PlannerDesklet.prototype = {
         notesE.style = 'min-width:280px; min-height:48px;';
         L.add_actor(field('Not', notesE));
 
-        const catOpts = [{ label: 'Yok', value: null }].concat(this.data.categories.map(function (c) {
-            return { label: c.name, value: c.id, color: c.color };
-        }));
-        L.add_actor(field('Kategori', chipRow(catOpts, function () { return st.categoryId; }, function (v) { st.categoryId = v; }, 3)));
-
-        const colOpts = [{ label: 'Kategori rengi', value: null }].concat(PALETTE.map(function (c) {
+        const colOpts = [{ label: 'Varsayılan', value: null }].concat(PALETTE.map(function (c) {
             return { label: '', value: c, color: c, swatch: true };
         }));
         L.add_actor(field('Renk', chipRow(colOpts, function () { return st.color; }, function (v) { st.color = v; }, 6)));
@@ -775,13 +740,6 @@ PlannerDesklet.prototype = {
             { label: 'Her hafta tekrarla', value: true }
         ], function () { return st.repeat; }, function (v) { st.repeat = v; }, 2)));
 
-        const timeBox = new St.BoxLayout({ style: 'spacing:8px;' });
-        const startE = mkEntry(f.startTime, 'Başlangıç SS:DD', 120);
-        const endE = mkEntry(f.endTime, 'Bitiş SS:DD', 120);
-        timeBox.add_actor(startE);
-        timeBox.add_actor(endE);
-        L.add_actor(field('Saat (isteğe bağlı)', timeBox));
-
         const dueE = mkEntry(f.due, 'YYYY-AA-GG (isteğe bağlı)', 180);
         L.add_actor(field('Bitiş / teslim tarihi', dueE));
 
@@ -799,15 +757,11 @@ PlannerDesklet.prototype = {
             if (!title) return err('Başlık gerekli.');
             const date = dateE.get_text().trim();
             if (!parseIso(date)) return err('Tarih YYYY-AA-GG biçiminde olmalı.');
-            const s = parseTime(startE.get_text()), e = parseTime(endE.get_text());
-            if (s === null || e === null) return err('Saat SS:DD biçiminde olmalı (örn. 09:30).');
-            if (s && e && e < s) return err('Bitiş saati başlangıçtan önce olamaz.');
             const due = dueE.get_text().trim();
             if (due && !parseIso(due)) return err('Teslim tarihi YYYY-AA-GG biçiminde olmalı.');
             const fields = {
                 title: title.slice(0, 200), notes: notesE.get_text().trim().slice(0, 2000),
-                categoryId: st.categoryId, color: st.color, important: st.important,
-                startTime: s, endTime: e, due: due
+                color: st.color, important: st.important, due: due
             };
             dlg.close();
             self._later(function () { self._commitEdit(o, fields, date, st.repeat); });
@@ -852,63 +806,6 @@ PlannerDesklet.prototype = {
                 { label: 'Sil', run: function () { Model.remove(self.data, o, 'this'); self._changed(); } }
             ]);
         }
-    },
-
-    _openCategories: function () {
-        const self = this;
-        const work = this.data.categories.map(function (c) { return { id: c.id, name: c.name, color: c.color }; });
-        const dlg = this._newDialog('Kategoriler');
-        const list = new St.BoxLayout({ vertical: true, style: 'spacing:6px; min-width:300px;' });
-        dlg.contentLayout.add_actor(list);
-
-        const rebuild = function () {
-            list.destroy_all_children();
-            work.forEach(function (c, idx) {
-                const row = new St.BoxLayout({ style: 'spacing:6px;' });
-                const sw = new St.Button({ label: '', reactive: true, can_focus: true });
-                const paint = function () { sw.style = chipStyle(false, c.color, true); };
-                paint();
-                sw.connect('clicked', function () {
-                    const i = PALETTE.indexOf(c.color);
-                    c.color = PALETTE[(i + 1) % PALETTE.length];
-                    paint();
-                });
-                const e = mkEntry(c.name, 'Kategori adı', 200);
-                e.clutter_text.connect('text-changed', function () { c.name = e.get_text(); });
-                const del = new St.Button({ label: '✕', reactive: true, can_focus: true, style: chipStyle(false) });
-                del.connect('clicked', function () { work.splice(idx, 1); rebuild(); });
-                row.add_actor(sw); row.add_actor(e); row.add_actor(del);
-                list.add_actor(row);
-            });
-            const add = new St.Button({ label: '＋ Kategori ekle', reactive: true, can_focus: true, style: chipStyle(false) });
-            add.connect('clicked', function () {
-                work.push({ id: newId(), name: 'Yeni kategori', color: PALETTE[work.length % PALETTE.length] });
-                rebuild();
-            });
-            list.add_actor(add);
-        };
-        rebuild();
-        dlg.contentLayout.add_actor(new St.Label({ text: 'Renk düğmesine tıklayarak rengi değiştirebilirsiniz.', style: 'font-size:11px; opacity:170; padding-top:6px;' }));
-
-        dlg.setButtons([
-            { label: 'İptal', action: function () { dlg.close(); }, key: Clutter.KEY_Escape },
-            {
-                label: 'Kaydet', action: function () {
-                    work.forEach(function (c) { c.name = (c.name || '').trim() || 'Kategori'; });
-                    self.data.categories = work;
-                    const ids = {};
-                    work.forEach(function (c) { ids[c.id] = true; });
-                    self.data.items.forEach(function (it) { if (it.categoryId && !ids[it.categoryId]) it.categoryId = null; });
-                    Object.keys(self.data.occ).forEach(function (k) {
-                        const ov = self.data.occ[k].over;
-                        if (ov && ov.categoryId && !ids[ov.categoryId]) ov.categoryId = null;
-                    });
-                    dlg.close();
-                    self._changed();
-                }
-            }
-        ]);
-        dlg.open();
     },
 
     /* ---------------- yaşam döngüsü ---------------- */

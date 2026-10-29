@@ -3,7 +3,7 @@ global.global = { logError: console.error };
 const assert = require('assert');
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '../weekly-planner@egemngyk/desklet.js'), 'utf8') +
-    '\nmodule.exports = { Model, iso, parseIso, addDays, mondayOf, formatRange, parseTime, readable };';
+    '\nmodule.exports = { Model, iso, parseIso, addDays, mondayOf, formatRange, readable };';
 const mod = { exports: {} };
 new Function('module', 'exports', src)(mod, mod.exports);
 const M = mod.exports;
@@ -15,7 +15,7 @@ let d = Model.defaults();
 // 2 Kasım 2026 = Pazartesi
 assert.strictEqual(parseIso('2026-11-02').getDay(), 1);
 Model.create(d, {title:'Matematik',notes:'',categoryId:null,color:null,important:false,startTime:'09:00',endTime:'',due:''}, '2026-11-02', true);
-Model.create(d, {title:'Tarih sınavı',notes:'',categoryId:'cat-sinav',color:null,important:true,startTime:'',endTime:'',due:''}, '2026-11-04', false);
+Model.create(d, {title:'Tarih sınavı',notes:'',categoryId:null,color:null,important:true,startTime:'',endTime:'',due:''}, '2026-11-04', false);
 Model.create(d, {title:'Ödev teslim',notes:'',categoryId:null,color:null,important:false,startTime:'',endTime:'',due:''}, '2026-11-10', false);
 
 assert.deepStrictEqual(titles(d,'2026-11-02'), ['Matematik','','Tarih sınavı','','','','']);
@@ -93,7 +93,7 @@ assert.ok(!d.items.some(i => i.title === 'Ödev teslim'));
 const rt = Model.normalize(JSON.parse(JSON.stringify(d)));
 assert.deepStrictEqual(rt.items.length, d.items.length);
 const bad = Model.normalize({items:[{id:'x',title:'a',kind:'once',date:'2026-13-45'},{foo:1}], categories:'nope', occ:5, ui:{weekOffset:'x'}});
-assert.strictEqual(bad.items.length, 0); assert.strictEqual(bad.categories.length, 6);
+assert.strictEqual(bad.items.length, 0);
 assert.strictEqual(Model.normalize(null).items.length, 0);
 
 // tarih aralığı biçimi
@@ -104,5 +104,4 @@ assert.strictEqual(formatRange(wk('2026-12-28'),'long'), '28 Aralık 2026 – 3 
 assert.strictEqual(formatRange(wk('2026-11-02'),'numeric'), '02.11.2026 – 08.11.2026');
 // DST haftası (Avrupa/İstanbul sabit, ABD değişir): hafta 7 gün, pazartesi başlar
 assert.strictEqual(iso(addDays(wk('2026-03-23'),7)), '2026-03-30');
-assert.strictEqual(M.parseTime('9.30'), '09:30'); assert.strictEqual(M.parseTime('25:00'), null); assert.strictEqual(M.parseTime(''), '');
 console.log('TÜM TESTLER GEÇTİ');
