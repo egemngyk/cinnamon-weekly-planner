@@ -1,8 +1,8 @@
 {
     "uuid": "weekly-planner@egemngyk",
     "name": "Weekly Planner",
-    "description": "A weekly planner showing recurring and date-bound entries, tasks and exams; every instance works independently. English and Turkish interface.",
-    "version": "1.1.0",
+    "description": "A weekly planner whose entries (weekly-repeating or for a specific week, with to-do, important and color options) are edited in the settings; every instance works independently. English and Turkish interface.",
+    "version": "1.2.0",
     "max-instances": "50",
     "website": "https://github.com/egemngyk",
     "license": "MIT"

@@ -13,44 +13,52 @@ Then: **System Settings → Desklets → Weekly Planner → +**.
 Add the desklet as many times as you like; each one starts empty and independent. If it doesn't show up, press `Alt+F2`, type `r`, and hit Enter.
 
 ## Usage
-- Click an empty day area (or **＋**) to add a new entry. Click an entry to see details, edit or delete it.
-- **New/edit dialog:** choose *Repeat* first.
-  - *Repeat every week* shows only the seven weekdays (Mon–Sun) — pick the weekday the entry repeats on.
-  - *Selected date only* shows the seven days of a week with their dates. Use ‹ › or **Today** to change the week,
-    or type any date in the *Go to date* box and press **Go** to open that date's week, then click the day.
-- **Content settings:** Configure → *Content* toggles the notes preview, the due date, the completion checkbox and the ★ marker.
-- ☐/☑ toggles completion (the entry is not deleted; the state belongs only to that week's occurrence).
-- In the header: ‹ › week navigation, **Today**, **＋**.
-- **Repeat:** "Selected date only" or "Repeat every week". When editing or deleting a weekly entry you choose
-  *This week only* or *This and following weeks* (for deletion: end the repeat from this week on).
+The desklet only **displays** the planner; entries are not added from the desklet itself.
+Everything is edited in **Configure → Entries** (right-click the desklet → *Configure…*).
+
+- **Entries tab, mode switch — *Repeat every week*:**
+  - **On:** each weekday (Monday–Sunday) has its own list. Entries in these lists appear every week.
+  - **Off:** the lists belong to one specific week only. The week being edited is shown at the top; use
+    **‹ Previous week**, **Next week ›**, **This week**, or type any date (`YYYY-MM-DD`) and press
+    **Save and go to the date above** to jump to the week that contains it. Every week has its own entries.
+    Changes are saved automatically; the desklet shows the week you are editing.
+- **Per day:** the switch at the top of each day section shows/hides that weekday on the desklet (hidden days are not
+  drawn and the remaining columns/rows use the freed space; their entries are kept). The list below it holds the
+  entries: use the list's **+** button to add one and **✎ / −** to edit or remove. Columns:
+  *Title*, *Notes*, *To-do* (adds a completion checkbox), *Important* (★, highlighted), *Color*
+  (`blue`, `red`, `yellow`, `purple`, `teal`, `gray`, `pink`, `green`, `orange`, `navy`, the Turkish names, or `#rrggbb`;
+  empty = accent color) and *Due date* (`YYYY-MM-DD`, optional).
+- **On the desklet:** ‹ › week navigation and **Today** in the header. ☐/☑ toggles completion of a *To-do* entry
+  (the state belongs only to that date's occurrence, so a weekly entry can be done in one week and open in the next).
+- **Content settings:** Configure → *General → Content* toggles the notes preview, the due date, the completion checkbox and the ★ marker.
 - **Resizing:** drag the right edge (`⋮`), the bottom edge (`⋯`) or the bottom-right corner (`◢`) with the mouse.
   The right-click menu also has *Width ±60*, *Height ±60* and *Go to this week*.
-- **Scale:** Configure → Size → *UI scale* (75%–200%) scales fonts, spacing and buttons together.
-- **Hiding days:** Configure → *Visible days* lets you hide any weekdays completely (for example Saturday and Sunday).
-  Hidden days are not drawn at all and the remaining columns/rows use the freed space; their entries are kept and
-  show up again when you re-enable the day. If every day is hidden, a hint is shown instead.
+- **Scale:** Configure → General → Size → *UI scale* (75%–200%) scales fonts, spacing and buttons together.
 - **Responsive columns:** the seven columns shrink with the desklet width; below a minimum column width
   they stop shrinking and horizontal scrolling takes over.
 
 ## Language
-Open **Configure** (right-click the desklet → *Configure…*, or the gear button in System Settings → Desklets)
+Open **Configure → General** (right-click the desklet → *Configure…*, or the gear button in System Settings → Desklets)
 and pick **Language → English / Turkish**. The change applies immediately to the week title, day names,
 buttons, dialogs and the right-click menu. The language is a per-instance setting, so different desklets can use different languages.
 The Configure window itself (setting names) is always shown in English.
 
 ## Data model and isolation
-- Appearance settings: Cinnamon's per-instance settings file (`~/.config/cinnamon/spices/weekly-planner@egemngyk/<id>.json`).
+- Appearance settings and the entry lists of the settings window: Cinnamon's per-instance settings file
+  (`~/.config/cinnamon/spices/weekly-planner@egemngyk/<id>.json`).
 - Entries: `~/.local/share/weekly-planner-desklet/<desklet_id>.json` (atomic writes, the previous version is kept as a `<id>.json~` backup;
-  a corrupt file is moved aside as `.corrupt-<timestamp>`).
-- `items` (rules: `once` / `weekly`) and `occ` (per-date exceptions: `done`, `skip`, `over`) are stored separately;
+  a corrupt file is moved aside as `.corrupt-<timestamp>`). This file is the source of truth; the lists in the settings window are an
+  editing view that is re-filled from it (for example after switching weeks or resetting the settings).
+- `weekly` (seven lists, repeat every week), `weeks` (per-week lists, keyed by the Monday date) and `occ` (done state per date);
   no per-week copies are generated for weekly entries. Day/time/week calculations use the local time zone.
+- Data files from versions before 1.2 (recurrence rules with per-date exceptions) are migrated automatically on first load.
 - Removing the desklet does not delete its data file (so nothing is lost when reloading).
 
 ## Supported versions / assumptions
 - Target: Cinnamon 5.x and 6.x (Linux Mint 21/22). Uses the `Desklet`, `DeskletSettings`, `ModalDialog` and `St` APIs;
   there is no Node/Electron/web dependency. It is expected to work on 4.x as well but this was not verified.
-- Dates are entered as `YYYY-MM-DD` (± day buttons). Weeks start on Monday.
-- "This and following weeks" editing splits the series; earlier weeks keep their old state.
+- Dates are entered as `YYYY-MM-DD`. Weeks start on Monday.
+- The Entries tab uses the settings `list` widget, a `layout` with pages, and `button` callbacks, which Cinnamon 5.x/6.x support.
 
 ## Development / debugging
 - Model logic tests (no Cinnamon needed): `node tests/model.test.js` (runs without touching `desklet.js`).

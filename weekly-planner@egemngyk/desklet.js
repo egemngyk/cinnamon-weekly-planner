@@ -1,8 +1,12 @@
 /* Weekly Planner — Cinnamon desklet
  *
  * Architecture:
- *  - Model: pure data/recurrence logic with no GI dependency (testable with node).
+ *  - Model: pure data logic with no GI dependency (testable with node).
  *  - PlannerDesklet: Cinnamon UI, settings and storage.
+ *
+ * Entries are NOT added from the desklet itself. They are edited in Configure → Entries
+ * (one list per weekday, in "repeat every week" mode or for one specific week). The data file is the
+ * source of truth; the lists in the settings window are an editing view that is kept in sync with it.
  *
  * Every desklet instance (desklet_id) uses its own settings file (managed by Cinnamon) and its own
  * data file: ~/.local/share/weekly-planner-desklet/<desklet_id>.json
@@ -18,12 +22,22 @@ const Pango = imports.gi.Pango;
 const Cinnamon = imports.gi.Cinnamon;
 const Mainloop = imports.mainloop;
 const Settings = imports.ui.settings;
-const ModalDialog = imports.ui.modalDialog;
 
 const DATA_DIR = GLib.build_filenamev([GLib.get_user_data_dir(), 'weekly-planner-desklet']);
 
-const PALETTE = ['#4f9dde', '#e5534b', '#e0a030', '#8e6ad8', '#3fb0a0', '#7f8c9a', '#d9609a', '#6ab04c', '#e67e22', '#2c3e50'];
-const FIELDS = ['title', 'notes', 'color', 'important', 'due'];
+/* Names accepted in the "Color" column of the entry lists (English and Turkish). */
+const COLOR_NAMES = {
+    blue: '#4f9dde', mavi: '#4f9dde',
+    red: '#e5534b', 'kırmızı': '#e5534b', kirmizi: '#e5534b',
+    yellow: '#e0a030', 'sarı': '#e0a030', sari: '#e0a030',
+    purple: '#8e6ad8', mor: '#8e6ad8',
+    teal: '#3fb0a0', turkuaz: '#3fb0a0',
+    gray: '#7f8c9a', grey: '#7f8c9a', gri: '#7f8c9a',
+    pink: '#d9609a', pembe: '#d9609a',
+    green: '#6ab04c', 'yeşil': '#6ab04c', yesil: '#6ab04c',
+    orange: '#e67e22', turuncu: '#e67e22',
+    navy: '#2c3e50', lacivert: '#2c3e50'
+};
 
 /* ------------------------------------------------------------------ */
 /* Translations (English is the default; Turkish is selectable)        */
@@ -42,25 +56,9 @@ const I18N = {
         menuWPlus: 'Width +60', menuWMinus: 'Width −60', menuHPlus: 'Height +60', menuHMinus: 'Height −60',
         menuGoto: 'Go to this week',
         renderErr: 'Display error (see the log).',
-        allHidden: 'All days are hidden.\nEnable some in Configure → Visible days.',
-        cancel: 'Cancel', save: 'Save', del: 'Delete',
-        newEntry: 'New entry', editEntry: 'Edit entry',
-        fTitle: 'Title', fNotes: 'Notes', fColor: 'Color', fDate: 'Date', fRepeat: 'Repeat',
-        fDue: 'End / due date', fPriority: 'Priority', fDay: 'Day', go: 'Go',
-        repeatsEvery: function (d) { return 'Repeats every ' + d; },
-        hintTitle: 'Title', hintNotes: 'Description / notes (optional)',
-        hintDate: 'YYYY-MM-DD', hintDue: 'YYYY-MM-DD (optional)',
-        colorDefault: 'Default', invalidDate: 'Invalid date',
-        repeatOnce: 'Selected date only', repeatWeekly: 'Repeat every week',
-        normal: 'Normal', important: '★ Important',
-        errTitle: 'Title is required.', errDate: 'Date must be in YYYY-MM-DD format.',
-        errDue: 'Due date must be in YYYY-MM-DD format.',
-        weeklyEntry: 'Weekly entry', applyWhere: 'Where should this change apply?',
-        thisWeek: 'This week only', thisAndFuture: 'This and following weeks',
-        delWeekly: 'Delete weekly entry', delThisWeek: 'Delete this week only', endFromNow: 'End from this week on',
-        whatToDo: function (t) { return 'What should happen to “' + t + '”?'; },
-        delEntry: 'Delete entry',
-        confirmDel: function (t) { return 'Delete “' + t + '”?'; }
+        allHidden: 'All days are hidden.\nEnable some in Configure → Entries.',
+        invalidDate: 'Invalid date — use YYYY-MM-DD',
+        editingWeek: 'Editing'
     },
     tr: {
         dayFirst: true,
@@ -74,25 +72,9 @@ const I18N = {
         menuWPlus: 'Genişlik +60', menuWMinus: 'Genişlik −60', menuHPlus: 'Yükseklik +60', menuHMinus: 'Yükseklik −60',
         menuGoto: 'Bu haftaya git',
         renderErr: 'Görüntüleme hatası (günlüğe bakın).',
-        allHidden: 'Tüm günler gizli.\nYapılandır → Visible days bölümünden açın.',
-        cancel: 'İptal', save: 'Kaydet', del: 'Sil',
-        newEntry: 'Yeni kayıt', editEntry: 'Kaydı düzenle',
-        fTitle: 'Başlık', fNotes: 'Not', fColor: 'Renk', fDate: 'Tarih', fRepeat: 'Tekrar',
-        fDue: 'Bitiş / teslim tarihi', fPriority: 'Önem', fDay: 'Gün', go: 'Git',
-        repeatsEvery: function (d) { return 'Her ' + d + ' tekrarlanır'; },
-        hintTitle: 'Başlık', hintNotes: 'Açıklama / not (isteğe bağlı)',
-        hintDate: 'YYYY-AA-GG', hintDue: 'YYYY-AA-GG (isteğe bağlı)',
-        colorDefault: 'Varsayılan', invalidDate: 'Geçersiz tarih',
-        repeatOnce: 'Yalnızca seçilen tarih', repeatWeekly: 'Her hafta tekrarla',
-        normal: 'Normal', important: '★ Önemli',
-        errTitle: 'Başlık gerekli.', errDate: 'Tarih YYYY-AA-GG biçiminde olmalı.',
-        errDue: 'Teslim tarihi YYYY-AA-GG biçiminde olmalı.',
-        weeklyEntry: 'Haftalık kayıt', applyWhere: 'Bu değişiklik nereye uygulansın?',
-        thisWeek: 'Yalnızca bu hafta', thisAndFuture: 'Bu ve sonraki haftalar',
-        delWeekly: 'Haftalık kaydı sil', delThisWeek: 'Yalnızca bu haftayı sil', endFromNow: 'Bu haftadan itibaren sonlandır',
-        whatToDo: function (t) { return '“' + t + '” için ne yapılsın?'; },
-        delEntry: 'Kaydı sil',
-        confirmDel: function (t) { return '“' + t + '” silinsin mi?'; }
+        allHidden: 'Tüm günler gizli.\nYapılandır → Entries bölümünden açın.',
+        invalidDate: 'Geçersiz tarih — YYYY-AA-GG kullanın',
+        editingWeek: 'Düzenlenen'
     }
 };
 
@@ -125,6 +107,17 @@ function parseColor(c) {
 function rgba(c, a) {
     const p = parseColor(c);
     return 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + (a === undefined ? p[3] : a) + ')';
+}
+/* Color column text (name, #rgb, #rrggbb, rgb()/rgba()) -> usable color string, or null. */
+function resolveColor(s) {
+    s = String(s === undefined || s === null ? '' : s).trim().toLowerCase();
+    if (!s) return null;
+    if (COLOR_NAMES[s]) return COLOR_NAMES[s];
+    let m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(s);
+    if (m) return '#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3];
+    if (/^#[0-9a-f]{6}$/.test(s)) return s;
+    if (/^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+\s*)?\)$/.test(s)) return s;
+    return null;
 }
 function lum(p) {
     const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
@@ -160,215 +153,232 @@ function formatRange(s, fmt, lang) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Model: recurrence rules and exceptions                              */
+/* Model: weekly entries, per-week entries and done state              */
 /* ------------------------------------------------------------------ */
 /*
  * data = {
- *   version: 1,
- *   ui: { weekOffset },
- *   items: [
- *     {id, kind:'once',   date,                       ...FIELDS},
- *     {id, kind:'weekly', weekday, startDate, endDate, ...FIELDS}   // endDate: inclusive, null = open-ended
- *   ],
- *   occ: { "<itemId>|<YYYY-MM-DD>": { done?, skip?, over?: {...FIELDS} } }   // per-occurrence exception
+ *   version: 2,
+ *   ui: { weekOffset, editWeek },          // editWeek: Monday (ISO) of the week edited in Configure → Entries
+ *   weekly: [ [entry...] x 7 ],            // repeat every week; index 0 = Monday
+ *   weeks: { "<Monday ISO>": [ [entry...] x 7 ] },   // entries of one specific week only
+ *   occ: { "<entryId>|<YYYY-MM-DD>": { done: true } }   // done state belongs to that date's occurrence
  * }
- * Done state, skips and overrides belong to the occurrence on that date, not to the rule.
+ * entry = { id, title, notes, color, important, todo, due, [from, to, skipDates] }   (from/to/skipDates only come from migration)
  */
 const Model = {
+    emptyWeek: function () { return [[], [], [], [], [], [], []]; },
+
     defaults: function () {
-        return {
-            version: 1,
-            ui: { weekOffset: 0 },
-            items: [],
-            occ: {}
-        };
+        return { version: 2, ui: { weekOffset: 0, editWeek: null }, weekly: Model.emptyWeek(), weeks: {}, occ: {} };
     },
 
-    pick: function (src) {
-        const r = {};
-        FIELDS.forEach(function (k) { r[k] = src[k]; });
+    toBool: function (v) { return v === true || v === 'true' || v === 1; },
+
+    /* A row of the settings list (or any loose object) -> normalized entry fields. */
+    rowToFields: function (row) {
+        row = row && typeof row === 'object' ? row : {};
+        const due = String(row.due === undefined || row.due === null ? '' : row.due).trim();
+        return {
+            title: String(row.title === undefined || row.title === null ? '' : row.title).trim().slice(0, 200) || 'Untitled',
+            notes: String(row.notes === undefined || row.notes === null ? '' : row.notes).trim().slice(0, 2000),
+            todo: Model.toBool(row.todo),
+            important: Model.toBool(row.important),
+            color: String(row.color === undefined || row.color === null ? '' : row.color).trim().slice(0, 40),
+            due: parseIso(due) ? due : ''
+        };
+    },
+    fieldsToRow: function (e) { return Model.rowToFields(e); },
+
+    cleanEntry: function (it) {
+        if (!it || typeof it !== 'object') return null;
+        const e = Model.rowToFields(it);
+        e.id = typeof it.id === 'string' && it.id ? it.id : newId();
+        if (parseIso(it.from)) e.from = it.from;
+        if (parseIso(it.to)) e.to = it.to;
+        if (Array.isArray(it.skipDates)) {
+            const s = it.skipDates.filter(function (x) { return !!parseIso(x); });
+            if (s.length) e.skipDates = s;
+        }
+        return e;
+    },
+
+    cleanWeek: function (w) {
+        const r = Model.emptyWeek();
+        if (!Array.isArray(w)) return r;
+        for (let i = 0; i < 7; i++) {
+            if (Array.isArray(w[i])) r[i] = w[i].map(Model.cleanEntry).filter(Boolean);
+        }
         return r;
+    },
+
+    putDated: function (d, e, dateStr) {
+        const dt = parseIso(dateStr);
+        const mon = iso(mondayOf(dt));
+        if (!d.weeks[mon]) d.weeks[mon] = Model.emptyWeek();
+        d.weeks[mon][wd(dt)].push(e);
+    },
+
+    /* Version 1 (items / occ with once + weekly rules) -> version 2. */
+    migrate: function (raw) {
+        const d = Model.defaults();
+        const occ = raw.occ && typeof raw.occ === 'object' ? raw.occ : {};
+        const base = function (it, over) {
+            const src = Object.assign({}, it, over || {});
+            const e = Model.rowToFields(src);
+            e.todo = true; // every v1 entry had a completion checkbox
+            e.id = it.id;
+            return e;
+        };
+        (Array.isArray(raw.items) ? raw.items : []).forEach(function (it) {
+            if (!it || typeof it.id !== 'string' || typeof it.title !== 'string') return;
+            if (it.kind === 'once' && parseIso(it.date)) {
+                Model.putDated(d, base(it), it.date);
+                const x = occ[it.id + '|' + it.date];
+                if (x && x.done) d.occ[it.id + '|' + it.date] = { done: true };
+            } else if (it.kind === 'weekly' && it.weekday >= 0 && it.weekday <= 6 && parseIso(it.startDate)) {
+                const e = base(it);
+                e.from = it.startDate;
+                if (parseIso(it.endDate)) e.to = it.endDate;
+                d.weekly[it.weekday | 0].push(e);
+                Object.keys(occ).forEach(function (k) {
+                    if (k.indexOf(it.id + '|') !== 0) return;
+                    const date = k.slice(it.id.length + 1), x = occ[k];
+                    if (!x || typeof x !== 'object' || !parseIso(date)) return;
+                    if (x.skip || x.over) {
+                        e.skipDates = (e.skipDates || []).concat([date]);
+                        if (x.over && !x.skip) { // an edited single occurrence becomes a one-week entry
+                            const n = base(it, x.over);
+                            n.id = newId();
+                            Model.putDated(d, n, date);
+                            if (x.done) d.occ[n.id + '|' + date] = { done: true };
+                        }
+                    } else if (x.done) {
+                        d.occ[k] = { done: true };
+                    }
+                });
+            }
+        });
+        return d;
     },
 
     /* Defensive normalization against corrupt or missing data. */
     normalize: function (raw) {
-        const d = Model.defaults();
-        if (!raw || typeof raw !== 'object') return d;
-        if (Array.isArray(raw.items)) {
-            d.items = [];
-            raw.items.forEach(function (it) {
-                if (!it || typeof it.id !== 'string' || typeof it.title !== 'string') return;
-                const base = {
-                    id: it.id, title: it.title,
-                    notes: typeof it.notes === 'string' ? it.notes : '',
-                    color: typeof it.color === 'string' ? it.color : null,
-                    important: !!it.important,
-                    due: parseIso(it.due) ? it.due : ''
-                };
-                if (it.kind === 'once' && parseIso(it.date)) {
-                    base.kind = 'once'; base.date = it.date;
-                } else if (it.kind === 'weekly' && it.weekday >= 0 && it.weekday <= 6 && parseIso(it.startDate)) {
-                    base.kind = 'weekly'; base.weekday = it.weekday | 0; base.startDate = it.startDate;
-                    base.endDate = parseIso(it.endDate) ? it.endDate : null;
-                } else return;
-                d.items.push(base);
-            });
-        }
-        if (raw.occ && typeof raw.occ === 'object') {
-            Object.keys(raw.occ).forEach(function (k) {
-                const x = raw.occ[k];
-                if (x && typeof x === 'object') d.occ[k] = x;
-            });
+        if (!raw || typeof raw !== 'object') return Model.defaults();
+        let d;
+        if (raw.version === 2) {
+            d = Model.defaults();
+            d.weekly = Model.cleanWeek(raw.weekly);
+            if (raw.weeks && typeof raw.weeks === 'object') {
+                Object.keys(raw.weeks).forEach(function (k) {
+                    const dt = parseIso(k);
+                    if (!dt || wd(dt) !== 0) return;
+                    const w = Model.cleanWeek(raw.weeks[k]);
+                    if (w.some(function (l) { return l.length; })) d.weeks[k] = w;
+                });
+            }
+            if (raw.occ && typeof raw.occ === 'object') {
+                Object.keys(raw.occ).forEach(function (k) {
+                    const x = raw.occ[k];
+                    if (x && typeof x === 'object' && x.done) d.occ[k] = { done: true };
+                });
+            }
+        } else {
+            d = Model.migrate(raw);
         }
         if (raw.ui && typeof raw.ui.weekOffset === 'number' && isFinite(raw.ui.weekOffset)) {
             d.ui.weekOffset = Math.max(-5000, Math.min(5000, Math.round(raw.ui.weekOffset)));
         }
+        if (raw.ui && parseIso(raw.ui.editWeek) && wd(parseIso(raw.ui.editWeek)) === 0) d.ui.editWeek = raw.ui.editWeek;
         return d;
     },
 
-    matches: function (it, date, weekdayIndex) {
-        if (it.kind === 'once') return it.date === date;
-        return it.weekday === weekdayIndex && date >= it.startDate && (!it.endDate || date <= it.endDate);
-    },
-
-    /* The occurrence of an item on a given date (exceptions applied). */
     occurrence: function (data, it, date) {
         const key = it.id + '|' + date;
-        const x = data.occ[key] || {};
-        if (x.skip) return null;
-        const f = Object.assign({}, it);
-        if (x.over) Object.assign(f, x.over);
-        return { item: it, date: date, key: key, f: f, done: !!x.done };
+        const x = data.occ[key];
+        return { item: it, date: date, key: key, f: it, done: !!(x && x.done) };
     },
 
-    /* Occurrences for the 7 days starting at `start` (a Monday). */
+    /* Occurrences for the 7 days starting at `start` (a Monday): weekly entries first, then this week's own entries. */
     occurrences: function (data, start) {
         const dates = [], days = [];
-        for (let i = 0; i < 7; i++) { dates.push(iso(addDays(start, i))); days.push([]); }
-        data.items.forEach(function (it) {
-            for (let i = 0; i < 7; i++) {
-                if (Model.matches(it, dates[i], i)) {
-                    const o = Model.occurrence(data, it, dates[i]);
-                    if (o) days[i].push(o);
-                }
-            }
-        });
+        const wk = data.weeks[iso(start)];
+        for (let i = 0; i < 7; i++) {
+            const date = iso(addDays(start, i));
+            dates.push(date);
+            const list = [];
+            data.weekly[i].forEach(function (it) {
+                if (it.from && date < it.from) return;
+                if (it.to && date > it.to) return;
+                if (it.skipDates && it.skipDates.indexOf(date) >= 0) return;
+                list.push(Model.occurrence(data, it, date));
+            });
+            if (wk) wk[i].forEach(function (it) { list.push(Model.occurrence(data, it, date)); });
+            days.push(list);
+        }
         return { dates: dates, days: days };
     },
 
-    keysOf: function (data, id) {
-        const p = id + '|';
-        return Object.keys(data.occ).filter(function (k) { return k.indexOf(p) === 0; });
-    },
-    dropOcc: function (data, id, fromDate) {
-        Model.keysOf(data, id).forEach(function (k) {
-            if (!fromDate || k.slice(k.indexOf('|') + 1) >= fromDate) delete data.occ[k];
-        });
-    },
-    removeItem: function (data, it) {
-        data.items = data.items.filter(function (x) { return x.id !== it.id; });
-        Model.dropOcc(data, it.id, null);
-    },
-    endSeriesBefore: function (data, it, date) {
-        if (date <= it.startDate) { Model.removeItem(data, it); return; }
-        it.endDate = iso(addDays(parseIso(date), -1));
-        Model.dropOcc(data, it.id, date);
-    },
-    moveOcc: function (data, id, from, to) {
-        if (from === to) return;
-        const a = id + '|' + from;
-        if (data.occ[a]) { data.occ[id + '|' + to] = data.occ[a]; delete data.occ[a]; }
-    },
-
-    create: function (data, fields, date, repeat) {
-        const base = Model.pick(fields);
-        base.id = newId();
-        if (repeat) {
-            base.kind = 'weekly'; base.weekday = wd(parseIso(date)); base.startDate = date; base.endDate = null;
-        } else {
-            base.kind = 'once'; base.date = date;
-        }
-        data.items.push(base);
-        return base;
-    },
-
     toggleDone: function (data, o) {
-        const x = data.occ[o.key] || {};
-        if (x.done) delete x.done; else x.done = true;
-        if (Object.keys(x).length) data.occ[o.key] = x; else delete data.occ[o.key];
+        if (data.occ[o.key]) delete data.occ[o.key]; else data.occ[o.key] = { done: true };
     },
 
-    /* scope: 'this' (this occurrence only) | 'future' (this and following weeks) — weekly items only. */
-    edit: function (data, o, fields, date, repeat, scope) {
-        const it = o.item, f = Model.pick(fields);
-        if (it.kind === 'once') {
-            Object.assign(it, f);
-            if (repeat) {
-                it.kind = 'weekly'; it.weekday = wd(parseIso(date)); it.startDate = date; it.endDate = null;
-                delete it.date;
-            } else {
-                it.date = date;
+    dropOcc: function (data, id) {
+        const p = id + '|';
+        Object.keys(data.occ).forEach(function (k) { if (k.indexOf(p) === 0) delete data.occ[k]; });
+    },
+
+    /*
+     * Turns the rows of a settings list into entries. Rows are matched to the existing entries (so ids,
+     * done state and hidden fields survive): first by identical title, then leftovers by position
+     * (that is a renamed entry).
+     */
+    reconcile: function (oldList, rows) {
+        const clean = (Array.isArray(rows) ? rows : []).map(Model.rowToFields);
+        const used = oldList.map(function () { return false; });
+        const match = clean.map(function () { return -1; });
+        clean.forEach(function (r, i) {
+            for (let j = 0; j < oldList.length; j++) {
+                if (!used[j] && oldList[j].title === r.title) { used[j] = true; match[i] = j; break; }
             }
-            Model.moveOcc(data, it.id, o.date, date);
-            return;
-        }
-        // --- weekly item ---
-        if (scope === 'this') {
-            if (repeat && date === o.date) {
-                const x = data.occ[o.key] || {};
-                x.over = f;
-                data.occ[o.key] = x;
-            } else {
-                // this occurrence was moved to another day / repeat was turned off: skip it and create a one-off item
-                const x = data.occ[o.key] || {};
-                const wasDone = !!x.done;
-                x.skip = true; delete x.over;
-                data.occ[o.key] = x;
-                const n = Model.create(data, f, date, false);
-                if (wasDone) data.occ[n.id + '|' + date] = { done: true };
-            }
-            return;
-        }
-        // scope === 'future'
-        if (!repeat) {
-            Model.endSeriesBefore(data, it, o.date);
-            Model.create(data, f, date, false);
-            return;
-        }
-        const newWd = wd(parseIso(date));
-        if (o.date <= it.startDate || date <= it.startDate) {
-            const oldWd = it.weekday;
-            Object.assign(it, f);
-            it.weekday = newWd; it.startDate = date;
-            if (oldWd !== newWd) Model.dropOcc(data, it.id, null);
-            return;
-        }
-        const origEnd = it.endDate;
-        const cut = o.date < date ? o.date : date;
-        const oldWd = it.weekday;
-        it.endDate = iso(addDays(parseIso(cut), -1));
-        const n = Model.create(data, f, date, true);
-        n.endDate = origEnd;
-        // move exceptions on/after the cut date to the new series (drop them if the weekday changed)
-        Model.keysOf(data, it.id).forEach(function (k) {
-            const d = k.slice(k.indexOf('|') + 1);
-            if (d >= cut) {
-                if (newWd === oldWd) data.occ[n.id + '|' + d] = data.occ[k];
-                delete data.occ[k];
-            }
+        });
+        const free = [];
+        used.forEach(function (u, j) { if (!u) free.push(j); });
+        clean.forEach(function (r, i) { if (match[i] < 0 && free.length) match[i] = free.shift(); });
+        return clean.map(function (r, i) {
+            return match[i] >= 0 ? Object.assign({}, oldList[match[i]], r) : Object.assign({ id: newId() }, r);
         });
     },
 
-    remove: function (data, o, scope) {
-        const it = o.item;
-        if (it.kind === 'once') { Model.removeItem(data, it); return; }
-        if (scope === 'this') {
-            const x = data.occ[o.key] || {};
-            x.skip = true; delete x.over;
-            data.occ[o.key] = x;
-        } else {
-            Model.endSeriesBefore(data, it, o.date);
+    setWeekDay: function (data, monday, i, list) {
+        let w = data.weeks[monday];
+        if (!w) {
+            if (!list.length) return;
+            w = data.weeks[monday] = Model.emptyWeek();
         }
+        w[i] = list;
+        if (w.every(function (l) { return !l.length; })) delete data.weeks[monday];
+    },
+
+    dayList: function (data, monday, i) {
+        if (monday === null) return data.weekly[i];
+        const w = data.weeks[monday];
+        return w ? w[i] : [];
+    },
+
+    /* Applies the rows of one day list (monday === null: weekly list). Returns true when something changed. */
+    applyRows: function (data, monday, i, rows) {
+        const cur = Model.dayList(data, monday, i);
+        const nxt = Model.reconcile(cur, rows);
+        if (JSON.stringify(cur) === JSON.stringify(nxt)) return false;
+        const keep = {};
+        nxt.forEach(function (e) { keep[e.id] = true; });
+        cur.forEach(function (e) { if (!keep[e.id]) Model.dropOcc(data, e.id); });
+        if (monday === null) data.weekly[i] = nxt; else Model.setWeekDay(data, monday, i, nxt);
+        return true;
+    },
+
+    rowsKey: function (rows) {
+        return JSON.stringify((Array.isArray(rows) ? rows : []).map(Model.rowToFields));
     }
 };
 
@@ -376,49 +386,9 @@ const Model = {
 /* UI helpers                                                          */
 /* ------------------------------------------------------------------ */
 
-function chipStyle(on, color, swatch) {
-    if (swatch) {
-        return 'width:18px; height:18px; border-radius:9px; background-color:' + color +
-            '; border:2px solid ' + (on ? '#ffffff' : 'rgba(255,255,255,0.15)') + ';';
-    }
-    return 'padding:3px 9px; border-radius:11px; color:#ffffff; border:1px solid ' +
-        (color || 'rgba(255,255,255,0.35)') + '; background-color:' +
-        (on ? (color ? rgba(color, 0.7) : 'rgba(255,255,255,0.28)') : 'rgba(255,255,255,0.06)') + ';';
-}
-
-/* options: [{label, value, color?, swatch?}] */
-function chipRow(options, getVal, setVal, perRow) {
-    const box = new St.BoxLayout({ vertical: true, style: 'spacing:4px;' });
-    const btns = [];
-    const refresh = function () {
-        btns.forEach(function (b) { b.btn.style = chipStyle(getVal() === b.value, b.color, b.swatch); });
-    };
-    let row = null;
-    options.forEach(function (o, i) {
-        if (i % perRow === 0) { row = new St.BoxLayout({ style: 'spacing:4px;' }); box.add_actor(row); }
-        const btn = new St.Button({ label: o.swatch ? '' : o.label, reactive: true, can_focus: true });
-        btn.connect('clicked', function () { setVal(o.value); refresh(); });
-        btns.push({ btn: btn, value: o.value, color: o.color, swatch: !!o.swatch });
-        row.add_actor(btn);
-    });
-    refresh();
-    return box;
-}
-
-function field(title, widget) {
-    const b = new St.BoxLayout({ vertical: true, style: 'spacing:3px; padding-top:7px;' });
-    b.add_actor(new St.Label({ text: title, style: 'font-size:11px; opacity:170;' }));
-    b.add_actor(widget);
-    return b;
-}
-
 /* x_fill/y_fill don't exist in some Cinnamon versions; passing them to the constructor would crash loading, so they are set here and failures are ignored. */
 function fillActor(a) {
     try { a.x_fill = true; a.y_fill = true; } catch (e) { /* ignore */ }
-}
-
-function mkEntry(text, hint, width) {
-    return new St.Entry({ text: text || '', hint_text: hint || '', can_focus: true, style: 'min-width:' + (width || 280) + 'px;' });
 }
 
 /* ------------------------------------------------------------------ */
@@ -430,6 +400,13 @@ const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width
     'opacity', 'borderWidth', 'borderRadius', 'dateFormat', 'headerStyle', 'uiScale', 'language',
     'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6',
     'showNotes', 'showDue', 'showCheckbox', 'showStar'];
+
+/* Settings list widgets: [kind, weekday index, settings key]. 'weekly' = repeat every week, 'week' = the week being edited. */
+const LIST_KEYS = [];
+for (let i = 0; i < 7; i++) {
+    LIST_KEYS.push(['weekly', i, 'weeklyItems' + i]);
+    LIST_KEYS.push(['week', i, 'weekItems' + i]);
+}
 
 function PlannerDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
@@ -444,7 +421,7 @@ PlannerDesklet.prototype = {
         this._saveTimer = null;
         this._cfgIdle = null;
         this._dayTimer = null;
-        this._dialog = null;
+        this._suppressUntil = 0;
         this._rs = null;
         this._rsId = null;
         this._rsTimer = null;
@@ -466,12 +443,20 @@ PlannerDesklet.prototype = {
         CFG_KEYS.forEach(function (k) {
             this.settings.bindProperty(Settings.BindingDirection.IN, k, 'cfg_' + k, this._onCfgChanged.bind(this));
         }, this);
+        LIST_KEYS.forEach(function (k) {
+            this.settings.bindProperty(Settings.BindingDirection.IN, k[2], 'cfg_' + k[2], function () {
+                this._onListChanged(k[0], k[1]);
+            }.bind(this));
+        }, this);
 
         this._loadData();
+        if (!this.data.ui.editWeek) this.data.ui.editWeek = iso(mondayOf(today()));
         this._buildUi();
         this._applyTheme();
         this._render();
         this._setupMenu();
+        this._pushLists();
+        this._updateWeekFields();
         this._todayStr = iso(today());
         this._dayTimer = Mainloop.timeout_add_seconds(60, this._checkDay.bind(this));
     },
@@ -522,6 +507,79 @@ PlannerDesklet.prototype = {
         this._render();
     },
 
+    /* ---------------- entry lists (Configure → Entries) ---------------- */
+
+    _getValue: function (key) {
+        try { return this.settings.getValue(key); } catch (e) { return undefined; }
+    },
+    _setValue: function (key, value) {
+        try { this.settings.setValue(key, value); } catch (e) { global.logError('[weekly-planner] could not set ' + key + ': ' + e); }
+    },
+
+    _editMonday: function () { return parseIso(this.data.ui.editWeek) || mondayOf(today()); },
+
+    /* A list in the settings window changed: fold it into the model. */
+    _onListChanged: function (kind, i) {
+        if (Date.now() < this._suppressUntil) return; // echo of our own _pushLists
+        try {
+            const key = (kind === 'weekly' ? 'weeklyItems' : 'weekItems') + i;
+            const monday = kind === 'weekly' ? null : iso(this._editMonday());
+            if (Model.applyRows(this.data, monday, i, this._getValue(key))) this._changed();
+        } catch (e) {
+            global.logError('[weekly-planner] list sync error: ' + e);
+        }
+    },
+
+    /* Reads every list from the settings (used before navigating to another week, so nothing is lost). */
+    _syncAllLists: function () {
+        const mon = iso(this._editMonday());
+        let any = false;
+        LIST_KEYS.forEach(function (k) {
+            const rows = this._getValue(k[2]);
+            if (rows === undefined) return;
+            if (Model.applyRows(this.data, k[0] === 'weekly' ? null : mon, k[1], rows)) any = true;
+        }, this);
+        if (any) this._changed();
+    },
+
+    /* Model -> settings lists. */
+    _pushLists: function () {
+        this._suppressUntil = Date.now() + 700;
+        const mon = iso(this._editMonday());
+        LIST_KEYS.forEach(function (k) {
+            const rows = Model.dayList(this.data, k[0] === 'weekly' ? null : mon, k[1]).map(Model.fieldsToRow);
+            if (Model.rowsKey(this._getValue(k[2])) !== Model.rowsKey(rows)) this._setValue(k[2], rows);
+        }, this);
+    },
+
+    _updateWeekFields: function () {
+        const mon = this._editMonday();
+        const info = this._t('editingWeek') + ': ' + formatRange(mon, 'long', this.cfg_language);
+        if (this._getValue('weekDate') !== iso(mon)) this._setValue('weekDate', iso(mon));
+        if (this._getValue('weekInfo') !== info) this._setValue('weekInfo', info);
+    },
+
+    _setEditWeek: function (monday) {
+        this._syncAllLists();
+        this.data.ui.editWeek = iso(monday);
+        // show the edited week on the desklet as well
+        this.data.ui.weekOffset = Math.max(-5000, Math.min(5000,
+            Math.round((monday.getTime() - mondayOf(today()).getTime()) / (7 * 86400000))));
+        this._pushLists();
+        this._updateWeekFields();
+        this._changed();
+    },
+
+    /* Callbacks of the buttons in Configure → Entries (called by name from the settings window). */
+    onWeekPrev: function () { this._setEditWeek(addDays(this._editMonday(), -7)); },
+    onWeekNext: function () { this._setEditWeek(addDays(this._editMonday(), 7)); },
+    onWeekToday: function () { this._setEditWeek(mondayOf(today())); },
+    onWeekGo: function () {
+        const d = parseIso(String(this._getValue('weekDate') || '').trim());
+        if (!d) { this._setValue('weekInfo', this._t('invalidDate')); return; }
+        this._setEditWeek(mondayOf(d));
+    },
+
     /* ---------------- settings / theme ---------------- */
 
     _onCfgChanged: function () {
@@ -551,7 +609,7 @@ PlannerDesklet.prototype = {
         this._root.style = 'background-color:' + t.bg + '; border:' + this.cfg_borderWidth + 'px solid ' + t.border +
             '; border-radius:' + this.cfg_borderRadius + 'px; padding:' + this._px(8) + 'px; color:' + t.text + '; font-size:' + t.fs + 'px;';
         const navStyle = 'color:' + t.text + '; padding:' + this._px(2) + 'px ' + this._px(8) + 'px; border-radius:' + this._px(6) + 'px; font-size:' + Math.round(t.fs * 1.25) + 'px;';
-        [this._btnPrev, this._btnNext, this._btnToday, this._btnAdd].forEach(function (b) { b.style = navStyle; });
+        [this._btnPrev, this._btnNext, this._btnToday].forEach(function (b) { b.style = navStyle; });
         this._title.style = 'font-weight:bold; color:' + t.text + '; font-size:' + Math.round(t.fs * 1.1) + 'px;';
         this._head.style = 'spacing:' + this._px(4) + 'px; padding-bottom:' + this._px(6) + 'px;';
         (this._handleList || []).forEach(function (h) { h(false); });
@@ -611,13 +669,11 @@ PlannerDesklet.prototype = {
         this._btnPrev = mk('‹', function () { this._shiftWeek(-1); }.bind(this));
         this._btnNext = mk('›', function () { this._shiftWeek(1); }.bind(this));
         this._btnToday = mk('Today', function () { this._gotoWeek(0); }.bind(this));
-        this._btnAdd = mk('＋', function () { this._openEditor(null, this._defaultNewDate()); }.bind(this));
         this._title = new St.Label({ text: '', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
         head.add_actor(this._btnPrev);
         head.add_actor(this._title);
         head.add_actor(this._btnNext);
         head.add_actor(this._btnToday);
-        head.add_actor(this._btnAdd);
         this._root.add_actor(head);
 
         // middle section: scroll area + right-edge handle
@@ -732,7 +788,7 @@ PlannerDesklet.prototype = {
         }
     },
 
-    /* ---------------- week navigation ---------------- */
+    /* ---------------- week navigation (display) ---------------- */
 
     _weekStart: function () { return addDays(mondayOf(today()), 7 * this.data.ui.weekOffset); },
     _shiftWeek: function (n) { this.data.ui.weekOffset += n; this._changed(); },
@@ -742,14 +798,6 @@ PlannerDesklet.prototype = {
         const r = [];
         for (let i = 0; i < 7; i++) if (this['cfg_showDay' + i] !== false) r.push(i);
         return r;
-    },
-    _defaultNewDate: function () {
-        const s = this._weekStart(), t = today();
-        const vis = this._visibleDays();
-        const diff = Math.round((t.getTime() - s.getTime()) / 86400000);
-        let i = diff >= 0 && diff < 7 ? diff : 0;
-        if (vis.length && vis.indexOf(i) < 0) i = vis[0]; // today is hidden: use the first visible day
-        return iso(addDays(s, i));
     },
 
     /* ---------------- rendering ---------------- */
@@ -771,15 +819,14 @@ PlannerDesklet.prototype = {
         }
     },
 
-    _dayButton: function (date, isToday) {
+    _dayBox: function (isToday) {
         const t = this._theme;
-        const btn = new St.Button({ style_class: 'wp-day', reactive: true, can_focus: false, y_expand: true });
-        fillActor(btn);
-        btn.style = isToday && this.cfg_highlightToday
+        const box = new St.Bin({ style_class: 'wp-day', y_expand: true });
+        fillActor(box);
+        box.style = isToday && this.cfg_highlightToday
             ? 'background-color:' + rgba(t.accent, 0.16) + '; border:1px solid ' + rgba(t.accent, 0.7) + ';'
             : 'border:1px solid ' + rgba(this.cfg_borderColor, 0.35) + ';';
-        btn.connect('clicked', function () { this._openEditor(null, date); }.bind(this));
-        return btn;
+        return box;
     },
 
     _dayHeader: function (i, date, isToday, horizontalRow) {
@@ -812,13 +859,13 @@ PlannerDesklet.prototype = {
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
             const date = occ.dates[i];
-            const btn = this._dayButton(date, date === todayStr);
-            btn.set_width(colW);
+            const box = this._dayBox(date === todayStr);
+            box.set_width(colW);
             const col = new St.BoxLayout({ vertical: true, style: 'spacing:' + (this.cfg_compact ? 2 : 4) + 'px;' });
             col.add_actor(this._dayHeader(i, date, date === todayStr, false));
             occ.days[i].forEach(function (o) { col.add_actor(this._makeItem(o)); }, this);
-            btn.set_child(col);
-            cols.add_actor(btn);
+            box.set_child(col);
+            cols.add_actor(box);
         }
         this._body.add_actor(cols);
     },
@@ -831,37 +878,39 @@ PlannerDesklet.prototype = {
         for (let k = 0; k < vis.length; k++) {
             const i = vis[k];
             const date = occ.dates[i];
-            const btn = this._dayButton(date, date === todayStr);
+            const box = this._dayBox(date === todayStr);
             const row = new St.BoxLayout({ style: 'spacing:8px;' });
             row.add_actor(this._dayHeader(i, date, date === todayStr, true));
             const list = new St.BoxLayout({ vertical: true, x_expand: true, style: 'spacing:' + (this.cfg_compact ? 2 : 4) + 'px;' });
             occ.days[i].forEach(function (o) { list.add_actor(this._makeItem(o)); }, this);
             row.add_actor(list);
-            btn.set_child(row);
-            rows.add_actor(btn);
+            box.set_child(row);
+            rows.add_actor(box);
         }
         this._body.add_actor(rows);
     },
 
     _colorOf: function (f) {
-        return f.color || this._theme.accent;
+        return resolveColor(f.color) || this._theme.accent;
     },
 
     _makeItem: function (o) {
         const t = this._theme, f = o.f, compact = !!this.cfg_compact;
         const color = this._colorOf(f);
         const ds = this.cfg_doneStyle;
-        const btn = new St.Button({ reactive: true, can_focus: false, x_expand: true });
-        fillActor(btn);
+        const todo = !!f.todo;
+        const done = todo && o.done;
+        const box = new St.Bin({ x_expand: true });
+        fillActor(box);
         const edge = f.important ? t.imp : color;
-        btn.style = 'border-left:' + this._px(3) + 'px solid ' + edge + '; border-radius:4px; background-color:' +
+        box.style = 'border-left:' + this._px(3) + 'px solid ' + edge + '; border-radius:4px; background-color:' +
             rgba(color, f.important ? 0.30 : 0.17) + '; padding:' + (compact ? this._px(1) + 'px ' + this._px(4) + 'px' : this._px(4) + 'px ' + this._px(6) + 'px') + ';' +
             (f.important ? ' border-top:1px solid ' + rgba(t.imp, 0.6) + '; border-bottom:1px solid ' + rgba(t.imp, 0.6) + ';' : '');
-        if (o.done && (ds === 'dim' || ds === 'both')) btn.opacity = 120;
+        if (done && (ds === 'dim' || ds === 'both')) box.opacity = 120;
 
         const row = new St.BoxLayout({ style: 'spacing:4px;' });
-        if (this.cfg_showCheckbox !== false) {
-            const chk = new St.Button({ label: o.done ? '☑' : '☐', reactive: true, can_focus: false });
+        if (todo && this.cfg_showCheckbox !== false) {
+            const chk = new St.Button({ label: done ? '☑' : '☐', reactive: true, can_focus: false });
             chk.style = 'padding:0 2px; color:' + t.text + ';';
             chk.connect('clicked', function () {
                 Model.toggleDone(this.data, o);
@@ -871,7 +920,7 @@ PlannerDesklet.prototype = {
         }
 
         const col = new St.BoxLayout({ vertical: true, x_expand: true });
-        const strike = o.done && (ds === 'strike' || ds === 'both');
+        const strike = done && (ds === 'strike' || ds === 'both');
         const title = new St.Label({
             text: (f.important && this.cfg_showStar !== false ? '★ ' : '') + trunc(f.title, compact ? 60 : 120),
             style: (f.important ? 'font-weight:bold; ' : '') + (strike ? 'text-decoration:line-through; ' : '')
@@ -896,237 +945,8 @@ PlannerDesklet.prototype = {
             col.add_actor(nl);
         }
         row.add_actor(col);
-        btn.set_child(row);
-        btn.connect('clicked', function () { this._openEditor(o, o.date); }.bind(this));
-        return btn;
-    },
-
-    /* ---------------- dialogs ---------------- */
-
-    _later: function (fn) {
-        // short delay so a new ModalDialog isn't opened while another one is closing
-        Mainloop.timeout_add(220, function () { try { fn(); } catch (e) { global.logError('[weekly-planner] ' + e); } return false; });
-    },
-
-    _newDialog: function (title) {
-        const dlg = new ModalDialog.ModalDialog({ styleClass: 'wp-dialog' });
-        dlg.contentLayout.add_actor(new St.Label({ text: title, style: 'font-weight:bold; font-size:15px; padding-bottom:4px;' }));
-        return dlg;
-    },
-
-    _choose: function (title, message, options) {
-        const dlg = this._newDialog(title);
-        const lbl = new St.Label({ text: message, style: 'padding:6px 0; max-width:360px;' });
-        lbl.clutter_text.set_line_wrap(true);
-        dlg.contentLayout.add_actor(lbl);
-        const buttons = options.map(function (o) {
-            return { label: o.label, action: function () { dlg.close(); o.run(); } };
-        });
-        buttons.push({ label: this._t('cancel'), action: function () { dlg.close(); }, key: Clutter.KEY_Escape });
-        dlg.setButtons(buttons);
-        dlg.open();
-    },
-
-    /* Click handler wrapper: a failure is logged instead of silently doing nothing. */
-    _openEditor: function (o, dateStr) {
-        try { this._openEditorImpl(o, dateStr); } catch (e) {
-            global.logError('[weekly-planner] could not open the editor: ' + e + '\n' + (e && e.stack ? e.stack : ''));
-        }
-    },
-
-    /* o = occurrence (edit) or null (new); dateStr = date for a new entry */
-    _openEditorImpl: function (o, dateStr) {
-        const self = this;
-        const lg = this._L();
-        const f = o ? o.f : { title: '', notes: '', color: null, important: false, due: '' };
-        const base = o ? o.date : dateStr;
-        const st = {
-            repeat: o ? o.item.kind === 'weekly' : false,
-            color: f.color || null,
-            important: !!f.important,
-            date: base,                      // chosen date (ISO)
-            wk: mondayOf(parseIso(base))     // Monday of the week shown in the picker
-        };
-        const dlg = this._newDialog(o ? this._t('editEntry') : this._t('newEntry'));
-        const L = dlg.contentLayout;
-
-        const titleE = mkEntry(f.title, this._t('hintTitle'));
-        L.add_actor(field(this._t('fTitle'), titleE));
-
-        const notesE = mkEntry(f.notes, this._t('hintNotes'));
-        notesE.clutter_text.set_single_line_mode(false);
-        notesE.clutter_text.set_activatable(false);
-        notesE.clutter_text.set_line_wrap(true);
-        notesE.style = 'min-width:280px; min-height:48px;';
-        L.add_actor(field(this._t('fNotes'), notesE));
-
-        const colOpts = [{ label: this._t('colorDefault'), value: null }].concat(PALETTE.map(function (c) {
-            return { label: '', value: c, color: c, swatch: true };
-        }));
-        L.add_actor(field(this._t('fColor'), chipRow(colOpts, function () { return st.color; }, function (v) { st.color = v; }, 6)));
-
-        const errL = new St.Label({ text: '', style: 'color:#ff7b72; padding-top:6px;' });
-
-        /* ---- repeat mode + day/date picker ---- */
-        const accent = this._theme.accent;
-        const dayStyle = function (on, isToday) {
-            return 'padding:3px 4px; min-width:42px; border-radius:6px; color:#ffffff; border:1px solid ' +
-                (on ? rgba(accent, 0.95) : (isToday ? rgba(accent, 0.6) : 'rgba(255,255,255,0.25)')) +
-                '; background-color:' + (on ? rgba(accent, 0.7) : 'rgba(255,255,255,0.06)') + ';';
-        };
-        const mkBtn = function (label, cb, style) {
-            const b = new St.Button({ label: label, reactive: true, can_focus: true, style: style || chipStyle(false) });
-            b.connect('clicked', cb);
-            return b;
-        };
-
-        const pickBox = new St.BoxLayout({ vertical: true, style: 'spacing:4px;' });
-        const pickLbl = new St.Label({ text: '', style: 'font-size:11px; opacity:170;' });
-
-        // week navigation + "go to date" (only for the single-date mode)
-        const navRow = new St.BoxLayout({ style: 'spacing:6px;' });
-        const weekLbl = new St.Label({ text: '', x_expand: true, y_align: Clutter.ActorAlign.CENTER });
-        const jumpRow = new St.BoxLayout({ style: 'spacing:6px;' });
-        const jumpE = mkEntry('', this._t('hintDate'), 130);
-        const daysRow = new St.BoxLayout({ style: 'spacing:4px;' });
-        const infoL = new St.Label({ text: '', style: 'font-size:11px; opacity:170;' });
-
-        const moveWeek = function (n) {
-            st.wk = addDays(st.wk, 7 * n);
-            st.date = iso(addDays(st.wk, wd(parseIso(st.date)))); // keep the same weekday in the new week
-            renderPicker();
-        };
-        const gotoDate = function (d) {
-            st.wk = mondayOf(d);
-            st.date = iso(d);
-            renderPicker();
-        };
-        navRow.add_actor(mkBtn('‹', function () { moveWeek(-1); }));
-        navRow.add_actor(weekLbl);
-        navRow.add_actor(mkBtn('›', function () { moveWeek(1); }));
-        navRow.add_actor(mkBtn(this._t('today'), function () { gotoDate(today()); }));
-        jumpRow.add_actor(jumpE);
-        jumpRow.add_actor(mkBtn(this._t('go'), function () {
-            const d = parseIso(jumpE.get_text().trim());
-            if (!d) { errL.set_text(self._t('invalidDate')); return; }
-            errL.set_text('');
-            gotoDate(d);
-        }));
-        pickBox.add_actor(navRow);
-        pickBox.add_actor(jumpRow);
-        pickBox.add_actor(daysRow);
-        pickBox.add_actor(infoL);
-
-        const renderPicker = function () {
-            daysRow.destroy_all_children();
-            const cur = parseIso(st.date);
-            if (st.repeat) {
-                // weekly mode: only the 7 weekdays (no dates)
-                pickLbl.set_text(self._t('fDay'));
-                navRow.hide(); jumpRow.hide();
-                st.wk = mondayOf(cur);
-                for (let i = 0; i < 7; i++) {
-                    (function (i) {
-                        daysRow.add_actor(mkBtn(lg.daysS[i], function () { st.date = iso(addDays(st.wk, i)); renderPicker(); },
-                            dayStyle(wd(cur) === i, false)));
-                    })(i);
-                }
-                infoL.set_text(self._t('repeatsEvery')(lg.days[wd(cur)]));
-            } else {
-                // single-date mode: the 7 days of the shown week, navigable to any date
-                pickLbl.set_text(self._t('fDate'));
-                navRow.show(); jumpRow.show();
-                weekLbl.set_text(formatRange(st.wk, 'short', self.cfg_language));
-                const todayIso = iso(today());
-                for (let i = 0; i < 7; i++) {
-                    (function (i) {
-                        const d = addDays(st.wk, i), di = iso(d);
-                        daysRow.add_actor(mkBtn(lg.daysS[i] + '\n' + d.getDate(), function () { st.date = di; renderPicker(); },
-                            dayStyle(di === st.date, di === todayIso)));
-                    })(i);
-                }
-                infoL.set_text(lg.days[wd(cur)] + ' · ' + (lg.dayFirst
-                    ? cur.getDate() + ' ' + lg.months[cur.getMonth()] + ' ' + cur.getFullYear()
-                    : lg.months[cur.getMonth()] + ' ' + cur.getDate() + ', ' + cur.getFullYear()));
-            }
-        };
-
-        L.add_actor(field(this._t('fRepeat'), chipRow([
-            { label: this._t('repeatOnce'), value: false },
-            { label: this._t('repeatWeekly'), value: true }
-        ], function () { return st.repeat; }, function (v) { st.repeat = v; renderPicker(); }, 2)));
-
-        const pickField = new St.BoxLayout({ vertical: true, style: 'spacing:3px; padding-top:7px;' });
-        pickField.add_actor(pickLbl);
-        pickField.add_actor(pickBox);
-        L.add_actor(pickField);
-        renderPicker();
-
-        const dueE = mkEntry(f.due, this._t('hintDue'), 180);
-        L.add_actor(field(this._t('fDue'), dueE));
-
-        L.add_actor(field(this._t('fPriority'), chipRow([
-            { label: this._t('normal'), value: false },
-            { label: this._t('important'), value: true, color: this._theme.imp }
-        ], function () { return st.important; }, function (v) { st.important = v; }, 2)));
-
-        L.add_actor(errL);
-
-        const onSave = function () {
-            const err = function (m) { errL.set_text(m); };
-            const title = titleE.get_text().trim();
-            if (!title) return err(self._t('errTitle'));
-            const date = st.date;
-            if (!parseIso(date)) return err(self._t('errDate'));
-            const due = dueE.get_text().trim();
-            if (due && !parseIso(due)) return err(self._t('errDue'));
-            const fields = {
-                title: title.slice(0, 200), notes: notesE.get_text().trim().slice(0, 2000),
-                color: st.color, important: st.important, due: due
-            };
-            dlg.close();
-            self._later(function () { self._commitEdit(o, fields, date, st.repeat); });
-        };
-
-        const buttons = [];
-        if (o) buttons.push({ label: self._t('del'), action: function () { dlg.close(); self._later(function () { self._confirmDelete(o); }); } });
-        buttons.push({ label: self._t('cancel'), action: function () { dlg.close(); }, key: Clutter.KEY_Escape });
-        buttons.push({ label: self._t('save'), action: onSave });
-        dlg.setButtons(buttons);
-        dlg.open();
-        try { dlg.setInitialKeyFocus(titleE); } catch (e) { /* not available in older versions */ }
-    },
-
-    _commitEdit: function (o, fields, date, repeat) {
-        const self = this;
-        if (!o) {
-            Model.create(this.data, fields, date, repeat);
-            this._changed();
-            return;
-        }
-        if (o.item.kind === 'weekly') {
-            this._choose(this._t('weeklyEntry'), this._t('applyWhere'), [
-                { label: self._t('thisWeek'), run: function () { Model.edit(self.data, o, fields, date, repeat, 'this'); self._changed(); } },
-                { label: self._t('thisAndFuture'), run: function () { Model.edit(self.data, o, fields, date, repeat, 'future'); self._changed(); } }
-            ]);
-        } else {
-            Model.edit(this.data, o, fields, date, repeat, 'this');
-            this._changed();
-        }
-    },
-
-    _confirmDelete: function (o) {
-        const self = this;
-        if (o.item.kind === 'weekly') {
-            this._choose(this._t('delWeekly'), this._t('whatToDo')(trunc(o.f.title, 50)), [
-                { label: self._t('delThisWeek'), run: function () { Model.remove(self.data, o, 'this'); self._changed(); } },
-                { label: self._t('endFromNow'), run: function () { Model.remove(self.data, o, 'future'); self._changed(); } }
-            ]);
-        } else {
-            this._choose(this._t('delEntry'), this._t('confirmDel')(trunc(o.f.title, 50)), [
-                { label: self._t('del'), run: function () { Model.remove(self.data, o, 'this'); self._changed(); } }
-            ]);
-        }
+        box.set_child(row);
+        return box;
     },
 
     /* ---------------- lifecycle ---------------- */
