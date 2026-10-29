@@ -726,6 +726,17 @@ PlannerDesklet.prototype = {
         }
     },
 
+    /* ---------------- week navigation ---------------- */
+
+    _weekStart: function () { return addDays(mondayOf(today()), 7 * this.data.ui.weekOffset); },
+    _shiftWeek: function (n) { this.data.ui.weekOffset += n; this._changed(); },
+    _gotoWeek: function (off) { this.data.ui.weekOffset = off; this._changed(); },
+    _defaultNewDate: function () {
+        const s = this._weekStart(), t = today();
+        const diff = Math.round((t.getTime() - s.getTime()) / 86400000);
+        return iso(diff >= 0 && diff < 7 ? t : s);
+    },
+
     /* ---------------- rendering ---------------- */
 
     _render: function () {

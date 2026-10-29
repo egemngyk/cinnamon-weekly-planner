@@ -10,7 +10,7 @@
         "tooltip": "Language of the desklet interface (week titles, buttons and dialogs)",
         "options": {
             "English": "en",
-            "Türkçe": "tr"
+            "Turkish": "tr"
         }
     },
     "layoutMode": {

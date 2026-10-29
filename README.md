@@ -26,7 +26,7 @@ Add the desklet as many times as you like; each one starts empty and independent
 
 ## Language
 Open **Configure** (right-click the desklet → *Configure…*, or the gear button in System Settings → Desklets)
-and pick **Language → English / Türkçe**. The change applies immediately to the week title, day names,
+and pick **Language → English / Turkish**. The change applies immediately to the week title, day names,
 buttons, dialogs and the right-click menu. The language is a per-instance setting, so different desklets can use different languages.
 The Configure window itself (setting names) is always shown in English.
 
