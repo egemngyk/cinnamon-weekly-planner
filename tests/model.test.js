@@ -153,7 +153,7 @@ const inLayout = new Set();
 schema.layout.pages.forEach(p => schema.layout[p].sections.forEach(s => schema.layout[s].keys.forEach(k => inLayout.add(k))));
 Object.keys(schema).forEach(k => { if (k !== 'layout') assert.ok(inLayout.has(k), 'key not in layout: ' + k); });
 inLayout.forEach(k => assert.ok(schema[k], 'layout key missing in schema: ' + k));
-assert.ok(!Object.keys(schema).some(k => /due|weekly|weekItems|weekDate|weekInfo/i.test(k)), 'leftover keys in schema');
+assert.ok(!Object.keys(schema).some(k => /(?:^|\b)due(?:$|\b)|showDue/i.test(k)), 'leftover due-date keys in schema');
 const cfg = /const CFG_KEYS = \[([\s\S]*?)\];/.exec(code)[1].match(/'(\w+)'/g).map(x => x.slice(1, -1));
 cfg.forEach(k => assert.ok(schema[k], 'CFG key without schema entry: ' + k));
 assert.ok(!/showDue|dueLabel|fDue|hintDue/.test(code), 'due date code left over');

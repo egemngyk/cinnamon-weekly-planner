@@ -20,8 +20,16 @@
             "type": "page",
             "title": "Entries",
             "sections": [
-                "secDays",
-                "secContent"
+                "secMode",
+                "secWeek",
+                "secContent",
+                "secDay0",
+                "secDay1",
+                "secDay2",
+                "secDay3",
+                "secDay4",
+                "secDay5",
+                "secDay6"
             ]
         },
         "secAppearance": {
@@ -74,17 +82,24 @@
                 "headerStyle"
             ]
         },
-        "secDays": {
+        "secMode": {
             "type": "section",
-            "title": "Visible days",
+            "title": "Entries — mode",
             "keys": [
-                "showDay0",
-                "showDay1",
-                "showDay2",
-                "showDay3",
-                "showDay4",
-                "showDay5",
-                "showDay6"
+                "weeklyMode"
+            ]
+        },
+        "secWeek": {
+            "type": "section",
+            "title": "Week being edited",
+            "dependency": "!weeklyMode",
+            "keys": [
+                "weekInfo",
+                "weekDate",
+                "weekGo",
+                "weekPrev",
+                "weekNext",
+                "weekToday"
             ]
         },
         "secContent": {
@@ -94,6 +109,69 @@
                 "showNotes",
                 "showCheckbox",
                 "showStar"
+            ]
+        },
+        "secDay0": {
+            "type": "section",
+            "title": "Monday",
+            "keys": [
+                "showDay0",
+                "weeklyItems0",
+                "weekItems0"
+            ]
+        },
+        "secDay1": {
+            "type": "section",
+            "title": "Tuesday",
+            "keys": [
+                "showDay1",
+                "weeklyItems1",
+                "weekItems1"
+            ]
+        },
+        "secDay2": {
+            "type": "section",
+            "title": "Wednesday",
+            "keys": [
+                "showDay2",
+                "weeklyItems2",
+                "weekItems2"
+            ]
+        },
+        "secDay3": {
+            "type": "section",
+            "title": "Thursday",
+            "keys": [
+                "showDay3",
+                "weeklyItems3",
+                "weekItems3"
+            ]
+        },
+        "secDay4": {
+            "type": "section",
+            "title": "Friday",
+            "keys": [
+                "showDay4",
+                "weeklyItems4",
+                "weekItems4"
+            ]
+        },
+        "secDay5": {
+            "type": "section",
+            "title": "Saturday",
+            "keys": [
+                "showDay5",
+                "weeklyItems5",
+                "weekItems5"
+            ]
+        },
+        "secDay6": {
+            "type": "section",
+            "title": "Sunday",
+            "keys": [
+                "showDay6",
+                "weeklyItems6",
+                "weekItems6"
             ]
         }
     },
@@ -255,40 +333,50 @@
             "Date only (11/02)": "date"
         }
     },
-    "showDay0": {
+    "weeklyMode": {
         "type": "switch",
         "default": true,
-        "description": "Show Monday"
+        "description": "Repeat every week",
+        "tooltip": "On: the lists below hold entries that repeat every week on the same weekday. Off: the lists hold entries of one specific week only (choose the week with the buttons below)."
     },
-    "showDay1": {
-        "type": "switch",
-        "default": true,
-        "description": "Show Tuesday"
+    "weekInfo": {
+        "type": "entry",
+        "default": "",
+        "description": "Week",
+        "tooltip": "The week whose entries are shown in the lists below (updated automatically).",
+        "dependency": "!weeklyMode"
     },
-    "showDay2": {
-        "type": "switch",
-        "default": true,
-        "description": "Show Wednesday"
+    "weekDate": {
+        "type": "entry",
+        "default": "",
+        "description": "Go to date (YYYY-MM-DD)",
+        "tooltip": "Type any date, then press the button below to jump to the week that contains it.",
+        "dependency": "!weeklyMode"
     },
-    "showDay3": {
-        "type": "switch",
-        "default": true,
-        "description": "Show Thursday"
+    "weekGo": {
+        "type": "button",
+        "description": "Save and go to the date above",
+        "callback": "onWeekGo",
+        "tooltip": "Changes are saved automatically; this opens the week of the date above.",
+        "dependency": "!weeklyMode"
     },
-    "showDay4": {
-        "type": "switch",
-        "default": true,
-        "description": "Show Friday"
+    "weekPrev": {
+        "type": "button",
+        "description": "‹ Previous week",
+        "callback": "onWeekPrev",
+        "dependency": "!weeklyMode"
     },
-    "showDay5": {
-        "type": "switch",
-        "default": true,
-        "description": "Show Saturday"
+    "weekNext": {
+        "type": "button",
+        "description": "Next week ›",
+        "callback": "onWeekNext",
+        "dependency": "!weeklyMode"
     },
-    "showDay6": {
-        "type": "switch",
-        "default": true,
-        "description": "Show Sunday"
+    "weekToday": {
+        "type": "button",
+        "description": "This week",
+        "callback": "onWeekToday",
+        "dependency": "!weeklyMode"
     },
     "showNotes": {
         "type": "switch",
@@ -304,5 +392,236 @@
         "type": "switch",
         "default": true,
         "description": "Show ★ on important entries"
+    },
+    "showDay0": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Monday"
+    },
+    "weeklyItems0": {
+        "type": "list",
+        "default": [],
+        "description": "Monday — every week",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "weeklyMode"
+    },
+    "weekItems0": {
+        "type": "list",
+        "default": [],
+        "description": "Monday — this week only",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "!weeklyMode"
+    },
+    "showDay1": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Tuesday"
+    },
+    "weeklyItems1": {
+        "type": "list",
+        "default": [],
+        "description": "Tuesday — every week",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "weeklyMode"
+    },
+    "weekItems1": {
+        "type": "list",
+        "default": [],
+        "description": "Tuesday — this week only",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "!weeklyMode"
+    },
+    "showDay2": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Wednesday"
+    },
+    "weeklyItems2": {
+        "type": "list",
+        "default": [],
+        "description": "Wednesday — every week",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "weeklyMode"
+    },
+    "weekItems2": {
+        "type": "list",
+        "default": [],
+        "description": "Wednesday — this week only",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "!weeklyMode"
+    },
+    "showDay3": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Thursday"
+    },
+    "weeklyItems3": {
+        "type": "list",
+        "default": [],
+        "description": "Thursday — every week",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "weeklyMode"
+    },
+    "weekItems3": {
+        "type": "list",
+        "default": [],
+        "description": "Thursday — this week only",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "!weeklyMode"
+    },
+    "showDay4": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Friday"
+    },
+    "weeklyItems4": {
+        "type": "list",
+        "default": [],
+        "description": "Friday — every week",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "weeklyMode"
+    },
+    "weekItems4": {
+        "type": "list",
+        "default": [],
+        "description": "Friday — this week only",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "!weeklyMode"
+    },
+    "showDay5": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Saturday"
+    },
+    "weeklyItems5": {
+        "type": "list",
+        "default": [],
+        "description": "Saturday — every week",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "weeklyMode"
+    },
+    "weekItems5": {
+        "type": "list",
+        "default": [],
+        "description": "Saturday — this week only",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "!weeklyMode"
+    },
+    "showDay6": {
+        "type": "switch",
+        "default": true,
+        "description": "Show Sunday"
+    },
+    "weeklyItems6": {
+        "type": "list",
+        "default": [],
+        "description": "Sunday — every week",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "weeklyMode"
+    },
+    "weekItems6": {
+        "type": "list",
+        "default": [],
+        "description": "Sunday — this week only",
+        "tooltip": "Color: blue, red, yellow, purple, teal, gray, pink, green, orange, navy (or #rrggbb); empty = default color. To-do entries get a completion checkbox.",
+        "columns": [
+            { "id": "title", "title": "Title", "type": "string", "default": "New entry" },
+            { "id": "notes", "title": "Notes", "type": "string", "default": "" },
+            { "id": "todo", "title": "To-do", "type": "boolean", "default": false },
+            { "id": "important", "title": "Important", "type": "boolean", "default": false },
+            { "id": "color", "title": "Color", "type": "string", "default": "" }
+        ],
+        "dependency": "!weeklyMode"
     }
 }

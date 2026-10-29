@@ -62,7 +62,9 @@ const I18N = {
         colorDefault: 'Default', toDo: 'To-do', important: '★ Important',
         errTitle: 'Title is required.',
         delEntry: 'Delete entry',
-        confirmDel: function (t) { return 'Delete “' + t + '”?'; }
+        confirmDel: function (t) { return 'Delete “' + t + '”?'; },
+        invalidDate: 'Invalid date — use YYYY-MM-DD',
+        editingWeek: 'Editing'
     },
     tr: {
         dayFirst: true,
@@ -83,7 +85,9 @@ const I18N = {
         colorDefault: 'Varsayılan', toDo: 'Yapılacak', important: '★ Önemli',
         errTitle: 'Başlık gerekli.',
         delEntry: 'Kaydı sil',
-        confirmDel: function (t) { return '“' + t + '” silinsin mi?'; }
+        confirmDel: function (t) { return '“' + t + '” silinsin mi?'; },
+        invalidDate: 'Geçersiz tarih — YYYY-AA-GG kullanın',
+        editingWeek: 'Düzenlenen'
     }
 };
 
@@ -192,8 +196,9 @@ function longDate(d, lang) {
  */
 const Model = {
     defaults: function () {
-        return { version: 3, ui: { weekOffset: 0, selected: null }, days: {} };
+        return { version: 3, ui: { weekOffset: 0, selected: null, editWeek: null }, weekly: [[], [], [], [], [], [], []], days: {} };
     },
+    emptyWeek: function () { return [[], [], [], [], [], [], []]; },
 
     toBool: function (v) { return v === true || v === 'true' || v === 1; },
     str: function (v) { return v === undefined || v === null ? '' : String(v); },
@@ -298,16 +303,29 @@ const Model = {
             d.ui.weekOffset = Math.max(-5000, Math.min(5000, Math.round(ui.weekOffset)));
         }
         if (raw.version === 3 && parseIso(ui.selected)) d.ui.selected = ui.selected;
+        if (raw.version === 3 && parseIso(ui.editWeek) && wd(parseIso(ui.editWeek)) === 0) d.ui.editWeek = ui.editWeek;
+        /* Restore weekly repeat lists. */
+        if (raw.version === 3 && Array.isArray(raw.weekly)) {
+            for (let i = 0; i < 7; i++) {
+                if (Array.isArray(raw.weekly[i])) {
+                    d.weekly[i] = raw.weekly[i].map(Model.cleanEntry).filter(Boolean);
+                }
+            }
+        }
         return d;
     },
 
-    /* The entries of the 7 days starting at `start` (a Monday). */
+    /* The entries of the 7 days starting at `start` (a Monday).
+     * Merges weekly-repeat entries (data.weekly[i]) with the date-specific ones. */
     week: function (data, start) {
         const dates = [], days = [];
+        const weekly = Array.isArray(data.weekly) ? data.weekly : [];
         for (let i = 0; i < 7; i++) {
             const date = iso(addDays(start, i));
             dates.push(date);
-            days.push(data.days[date] || []);
+            const dated = data.days[date] || [];
+            const rep = (weekly[i] || []).map(function (e) { return Object.assign({}, e, { _weekly: true }); });
+            days.push(rep.concat(dated));
         }
         return { dates: dates, days: days };
     },
@@ -357,6 +375,80 @@ const Model = {
         const i = Math.max(0, Math.min(dst.length, toIndex));
         dst.splice(i, 0, f.entry);
         return !(f.date === toDate && i === f.index);
+    },
+
+    /* ---- Settings list helpers ---- */
+
+    /* A row from the settings list widget -> normalized entry fields (no id/done). */
+    rowToFields: function (row) {
+        row = row && typeof row === 'object' ? row : {};
+        return {
+            title: Model.str(row.title).trim().slice(0, 200) || 'Untitled',
+            notes: Model.str(row.notes).trim().slice(0, 2000),
+            todo: Model.toBool(row.todo),
+            important: Model.toBool(row.important),
+            color: resolveColor(Model.str(row.color)) || ''
+        };
+    },
+    fieldsToRow: function (e) { return Model.rowToFields(e); },
+
+    /* Returns all entries for a given weekday index (0=Mon) and monday ISO string.
+     * monday === null  -> weekly-repeat virtual list stored in data.weekly[i]
+     * monday !== null  -> entries of that specific date (addDays(monday, i)) */
+    dayList: function (data, monday, i) {
+        if (monday === null) {
+            /* weekly repeat: use a virtual list stored in data.weekly */
+            if (!data.weekly) data.weekly = [[], [], [], [], [], [], []];
+            return data.weekly[i];
+        }
+        const date = iso(addDays(parseIso(monday), i));
+        return data.days[date] || [];
+    },
+
+    /* Serialisation key for change detection. */
+    rowsKey: function (rows) {
+        return JSON.stringify((Array.isArray(rows) ? rows : []).map(Model.rowToFields));
+    },
+
+    /*
+     * Reconcile old list with new rows, preserving entry ids and done state.
+     * Returns a new array of entry objects.
+     */
+    reconcile: function (oldList, rows) {
+        const clean = (Array.isArray(rows) ? rows : []).map(Model.rowToFields);
+        const used = oldList.map(function () { return false; });
+        const match = clean.map(function () { return -1; });
+        clean.forEach(function (r, i) {
+            for (let j = 0; j < oldList.length; j++) {
+                if (!used[j] && oldList[j].title === r.title) { used[j] = true; match[i] = j; break; }
+            }
+        });
+        const free = [];
+        used.forEach(function (u, j) { if (!u) free.push(j); });
+        clean.forEach(function (r, i) { if (match[i] < 0 && free.length) match[i] = free.shift(); });
+        return clean.map(function (r, i) {
+            return match[i] >= 0 ? Object.assign({}, oldList[match[i]], r) : Object.assign({ id: newId(), done: false }, r);
+        });
+    },
+
+    /* Apply rows from a settings list widget into the data model.
+     * monday === null  -> weekly-repeat list (data.weekly[i])
+     * monday !== null  -> specific date (data.days[date])
+     * Returns true when something changed. */
+    applyRows: function (data, monday, i, rows) {
+        const cur = Model.dayList(data, monday, i);
+        const nxt = Model.reconcile(cur, rows);
+        if (JSON.stringify(cur) === JSON.stringify(nxt)) return false;
+        if (monday === null) {
+            /* weekly repeat: store in data.weekly */
+            if (!data.weekly) data.weekly = [[], [], [], [], [], [], []];
+            data.weekly[i] = nxt;
+        } else {
+            const date = iso(addDays(parseIso(monday), i));
+            if (nxt.length) data.days[date] = nxt;
+            else delete data.days[date];
+        }
+        return true;
     }
 };
 
@@ -428,6 +520,14 @@ const CFG_KEYS = ['layoutMode', 'compact', 'highlightToday', 'doneStyle', 'width
     'showDay0', 'showDay1', 'showDay2', 'showDay3', 'showDay4', 'showDay5', 'showDay6',
     'showNotes', 'showCheckbox', 'showStar'];
 
+/* Settings list widgets: [kind, weekday index, settings key].
+ * 'weekly' = repeat every week (data.weekly[i]), 'week' = specific week being edited (data.days[date]). */
+const LIST_KEYS = [];
+for (let i = 0; i < 7; i++) {
+    LIST_KEYS.push(['weekly', i, 'weeklyItems' + i]);
+    LIST_KEYS.push(['week', i, 'weekItems' + i]);
+}
+
 function PlannerDesklet(metadata, desklet_id) {
     this._init(metadata, desklet_id);
 }
@@ -449,6 +549,7 @@ PlannerDesklet.prototype = {
         this._rsId = null;
         this._rsTimer = null;
         this._rsGrab = false;
+        this._suppressUntil = 0;
         try {
             this._setup(metadata, desklet_id);
         } catch (e) {
@@ -466,12 +567,20 @@ PlannerDesklet.prototype = {
         CFG_KEYS.forEach(function (k) {
             this.settings.bindProperty(Settings.BindingDirection.IN, k, 'cfg_' + k, this._onCfgChanged.bind(this));
         }, this);
+        LIST_KEYS.forEach(function (k) {
+            this.settings.bindProperty(Settings.BindingDirection.IN, k[2], 'cfg_' + k[2], function () {
+                this._onListChanged(k[0], k[1]);
+            }.bind(this));
+        }, this);
 
         this._loadData();
+        if (!this.data.ui.editWeek) this.data.ui.editWeek = iso(mondayOf(today()));
         this._buildUi();
         this._applyTheme();
         this._render();
         this._setupMenu();
+        this._pushLists();
+        this._updateWeekFields();
         this._todayStr = iso(today());
         this._dayTimer = Mainloop.timeout_add_seconds(60, this._checkDay.bind(this));
     },
@@ -527,6 +636,79 @@ PlannerDesklet.prototype = {
     _changed: function () {
         this._scheduleSave();
         this._render();
+    },
+
+    /* ---------------- entry lists (Configure → Entries) ---------------- */
+
+    _getValue: function (key) {
+        try { return this.settings.getValue(key); } catch (e) { return undefined; }
+    },
+    _setValue: function (key, value) {
+        try { this.settings.setValue(key, value); } catch (e) { global.logError('[weekly-planner] could not set ' + key + ': ' + e); }
+    },
+
+    _editMonday: function () { return parseIso(this.data.ui.editWeek) || mondayOf(today()); },
+
+    /* A list in the settings window changed: fold it into the model. */
+    _onListChanged: function (kind, i) {
+        if (Date.now() < this._suppressUntil) return; // echo of our own _pushLists
+        try {
+            const key = (kind === 'weekly' ? 'weeklyItems' : 'weekItems') + i;
+            const monday = kind === 'weekly' ? null : iso(this._editMonday());
+            if (Model.applyRows(this.data, monday, i, this._getValue(key))) this._changed();
+        } catch (e) {
+            global.logError('[weekly-planner] list sync error: ' + e);
+        }
+    },
+
+    /* Reads every list from the settings (used before navigating to another week). */
+    _syncAllLists: function () {
+        const mon = iso(this._editMonday());
+        let any = false;
+        LIST_KEYS.forEach(function (k) {
+            const rows = this._getValue(k[2]);
+            if (rows === undefined) return;
+            if (Model.applyRows(this.data, k[0] === 'weekly' ? null : mon, k[1], rows)) any = true;
+        }, this);
+        if (any) this._changed();
+    },
+
+    /* Model -> settings lists. */
+    _pushLists: function () {
+        this._suppressUntil = Date.now() + 700;
+        const mon = iso(this._editMonday());
+        LIST_KEYS.forEach(function (k) {
+            const rows = Model.dayList(this.data, k[0] === 'weekly' ? null : mon, k[1]).map(Model.fieldsToRow);
+            if (Model.rowsKey(this._getValue(k[2])) !== Model.rowsKey(rows)) this._setValue(k[2], rows);
+        }, this);
+    },
+
+    _updateWeekFields: function () {
+        const mon = this._editMonday();
+        const info = this._t('editingWeek') + ': ' + formatRange(mon, 'long', this.cfg_language);
+        if (this._getValue('weekDate') !== iso(mon)) this._setValue('weekDate', iso(mon));
+        if (this._getValue('weekInfo') !== info) this._setValue('weekInfo', info);
+    },
+
+    _setEditWeek: function (monday) {
+        this._syncAllLists();
+        this.data.ui.editWeek = iso(monday);
+        // also show the edited week on the desklet
+        this.data.ui.weekOffset = Math.max(-5000, Math.min(5000,
+            Math.round((monday.getTime() - mondayOf(today()).getTime()) / (7 * 86400000))));
+        this._pushLists();
+        this._updateWeekFields();
+        this._changed();
+    },
+
+    /* Callbacks invoked by buttons in Configure → Entries. */
+    onWeekPrev: function () { this._setEditWeek(addDays(this._editMonday(), -7)); },
+    onWeekNext: function () { this._setEditWeek(addDays(this._editMonday(), 7)); },
+    onWeekToday: function () { this._setEditWeek(mondayOf(today())); },
+    onWeekGo: function () {
+        const d = parseIso(String(this._getValue('weekDate') || '').trim());
+        if (!d) { this._setValue('weekInfo', this._t('invalidDate')); return; }
+        this._setEditWeek(mondayOf(d));
     },
 
     /* ---------------- settings / theme ---------------- */
